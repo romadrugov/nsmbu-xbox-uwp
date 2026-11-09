@@ -494,7 +494,7 @@ public:
         // First pump WinRT activation, THEN initialize D3D12 and LocalState logging.
         window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
         OpenLog();
-        Log("NSMBU Xbox RPX Inspection Probe v0.6.1 started");
+        Log("NSMBU Xbox RPX Inspection Probe v0.6.2 started");
         Log("[boot/0.5] Phase 1: reserve fixed Wii U guest virtual address space");
         xboxguest::GuestVm guestVm;
         if (!guestVm.open()) {
