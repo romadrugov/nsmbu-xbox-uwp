@@ -1,4 +1,4 @@
-name: NSMBU Xbox - PPC CPU and Guest Memory Probe
+name: NSMBU Xbox - Public Headless Runtime Bootstrap Probe
 
 on:
   push:
@@ -17,6 +17,10 @@ on:
       - "recomp/recomp.py"
       - "recomp/ppc2c.py"
       - "runtime/include/ppc.h"
+      - "runtime/src/core/headless_dispatch.*"
+      - "runtime/src/core/xbox_guest_vm.*"
+      - "runtime/test/headless_boot_test.c"
+      - "runtime/include/recomp_table.h"
       - ".github/workflows/xbox-smoke.yml"
   workflow_dispatch:
 
@@ -69,6 +73,15 @@ jobs:
             -o "$RUNNER_TEMP/ppc-public-fixture-run"
           "$RUNNER_TEMP/ppc-public-fixture-run"
           echo "PUBLIC RPX -> C -> native Clang executable: return 42 PASSED"
+          clang -std=c11 -O2 -I runtime/include -I runtime/src \
+            -I xbox/smoke -I "$fixture_dir" \
+            "${generated[@]}" "$fixture_dir/table.c" \
+            runtime/src/core/headless_dispatch.c \
+            xbox/smoke/ppc_fixture_bridge.c \
+            runtime/test/headless_boot_test.c \
+            -o "$RUNNER_TEMP/nsmbu-headless-public-boot"
+          "$RUNNER_TEMP/nsmbu-headless-public-boot"
+          echo "PUBLIC RPX -> recomp table -> guest dispatch -> synthetic HLE: PASSED"
   smoke:
     runs-on: windows-2022
     timeout-minutes: 35
@@ -82,7 +95,7 @@ jobs:
         with:
           name: nsmbu-xbox-smoke
           path: |
-            xbox/smoke/output/NSMBUXboxSmoke_0.4.0.0_x64.appx
+            xbox/smoke/output/NSMBUXboxSmoke_0.5.0.0_x64.appx
             xbox/smoke/output/NSMBUXboxSmoke.cer
             xbox/smoke/output/Microsoft.VCLibs.x64.14.00.appx
           if-no-files-found: error
