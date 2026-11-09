@@ -1,4 +1,4 @@
-name: NSMBU Xbox - GX2 2D Macro Detile Probe
+name: NSMBU Xbox - render Backend Dispatch Probe
 
 on:
   push:
@@ -9,6 +9,10 @@ on:
       - "runtime/test/gx2_detile_test.cpp"
       - "runtime/src/gfx/d3d12/gx2_macro_detile.*"
       - "runtime/test/gx2_macro_detile_test.cpp"
+      - "runtime/src/gfx/renderer.h"
+      - "runtime/src/gfx/renderer.cpp"
+      - "runtime/src/gfx/d3d12/backend_probe.*"
+      - "runtime/test/d3d12_backend_probe_test.cpp"
       - ".github/workflows/xbox-smoke.yml"
   workflow_dispatch:
 
@@ -36,6 +40,12 @@ jobs:
             runtime/test/gx2_macro_detile_test.cpp \
             -o /tmp/gx2_macro_detile_test
           /tmp/gx2_macro_detile_test
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -I runtime/src \
+            runtime/src/gfx/d3d12/backend_probe.cpp \
+            runtime/test/d3d12_backend_probe_test.cpp \
+            -o /tmp/d3d12_backend_probe_test
+          /tmp/d3d12_backend_probe_test
   smoke:
     runs-on: windows-2022
     timeout-minutes: 35
@@ -49,7 +59,7 @@ jobs:
         with:
           name: nsmbu-xbox-smoke
           path: |
-            xbox/smoke/output/NSMBUXboxSmoke_0.2.0.0_x64.appx
+            xbox/smoke/output/NSMBUXboxSmoke_0.3.0.0_x64.appx
             xbox/smoke/output/NSMBUXboxSmoke.cer
             xbox/smoke/output/Microsoft.VCLibs.x64.14.00.appx
           if-no-files-found: error
