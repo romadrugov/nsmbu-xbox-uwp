@@ -107,7 +107,7 @@ if (-not (Test-Path $makeappx) -or -not (Test-Path $signtool)) {
     throw 'Windows SDK app packaging tools missing'
 }
 
-$appx = Join-Path $out 'NSMBUXboxSmoke_0.2.0.0_x64.appx'
+$appx = Join-Path $out 'NSMBUXboxSmoke_0.3.0.0_x64.appx'
 $cer = Join-Path $out 'NSMBUXboxSmoke.cer'
 $pfx = Join-Path $env:RUNNER_TEMP 'nsmbu-smoke-private.pfx'
 $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=NSMBUXbox' -CertStoreLocation 'Cert:\CurrentUser\My' -KeyAlgorithm RSA -KeyLength 2048 -KeyExportPolicy Exportable -HashAlgorithm SHA256 -NotAfter (Get-Date).AddYears(1)
