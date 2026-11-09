@@ -2,8 +2,10 @@
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
-  IgnorableNamespaces="uap">
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  IgnorableNamespaces="uap mp">
   <Identity Name="Romadrugov.NSMBUXboxSmoke" Publisher="CN=NSMBUXbox" Version="0.1.0.0" ProcessorArchitecture="x64" />
+  <mp:PhoneIdentity PhoneProductId="5ca726b3-c8ae-40d2-909a-8d14e266d4b4" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
     <DisplayName>NSMBU Xbox D3D12 Smoke Test</DisplayName>
     <PublisherDisplayName>NSMBU Xbox Project</PublisherDisplayName>
