@@ -1,4 +1,4 @@
-name: NSMBU Xbox - render Backend Dispatch Probe
+name: NSMBU Xbox - PPC CPU and Guest Memory Probe
 
 on:
   push:
@@ -13,6 +13,10 @@ on:
       - "runtime/src/gfx/renderer.cpp"
       - "runtime/src/gfx/d3d12/backend_probe.*"
       - "runtime/test/d3d12_backend_probe_test.cpp"
+      - "recomp/android_fixture.py"
+      - "recomp/recomp.py"
+      - "recomp/ppc2c.py"
+      - "runtime/include/ppc.h"
       - ".github/workflows/xbox-smoke.yml"
   workflow_dispatch:
 
@@ -59,7 +63,7 @@ jobs:
         with:
           name: nsmbu-xbox-smoke
           path: |
-            xbox/smoke/output/NSMBUXboxSmoke_0.3.0.0_x64.appx
+            xbox/smoke/output/NSMBUXboxSmoke_0.4.0.0_x64.appx
             xbox/smoke/output/NSMBUXboxSmoke.cer
             xbox/smoke/output/Microsoft.VCLibs.x64.14.00.appx
           if-no-files-found: error
