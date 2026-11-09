@@ -50,6 +50,25 @@ jobs:
             runtime/test/d3d12_backend_probe_test.cpp \
             -o /tmp/d3d12_backend_probe_test
           /tmp/d3d12_backend_probe_test
+  translated-ppc-host-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Recompile public three-instruction PowerPC RPX and execute native Clang output
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 recomp/android_fixture.py --output "$RUNNER_TEMP/ppc-public-fixture"
+          fixture_dir="$RUNNER_TEMP/ppc-public-fixture/gen"
+          mapfile -t generated < <(find "$fixture_dir" -maxdepth 1 -name '*.c' \
+            ! -name 'harness.c' ! -name 'table.c' ! -name 'imports.c' -print)
+          test "${#generated[@]}" -ge 1
+          clang -std=c11 -O2 -I runtime/include -I "$fixture_dir" \
+            "${generated[@]}" "$fixture_dir/harness.c" \
+            -o "$RUNNER_TEMP/ppc-public-fixture-run"
+          "$RUNNER_TEMP/ppc-public-fixture-run"
+          echo "PUBLIC RPX -> C -> native Clang executable: return 42 PASSED"
   smoke:
     runs-on: windows-2022
     timeout-minutes: 35
