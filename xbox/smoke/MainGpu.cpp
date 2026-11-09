@@ -11,6 +11,8 @@
 #include <cstring>
 #include <exception>
 #include "gfx/d3d12/format_map.h"
+#include "gfx/d3d12/texture_upload.h"
+#include <array>
 #include <climits>
 #include "GpuShadersVS.h"
 #include "GpuShadersPS.h"
@@ -125,6 +127,8 @@ public:
         Log("Building D3D12 shader pipeline");
         InitPipeline();
         Log("D3D12 shader pipeline initialized");
+        Log("Preparing checker texture and upload buffer");
+        InitTexture();
     }
 
     ~D3D12Smoke() {
@@ -157,8 +161,11 @@ public:
         list_->RSSetScissorRects(1, &scissor);
         list_->SetPipelineState(pipeline_.Get());
         list_->SetGraphicsRootSignature(rootSignature_.Get());
+        ID3D12DescriptorHeap* heaps[] = {srvHeap_.Get()};
+        list_->SetDescriptorHeaps(1, heaps);
+        list_->SetGraphicsRootDescriptorTable(0, srvHeap_->GetGPUDescriptorHandleForHeapStart());
         list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        list_->DrawInstanced(3, 1, 0, 0);
+        list_->DrawInstanced(6, 1, 0, 0);
 
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -185,8 +192,84 @@ public:
     }
 
 private:
+    void InitTexture() {
+        // 48*4=192 source bytes/row; D3D12 copy pitch is 256.
+        constexpr uint32_t size = 48;
+        std::array<uint8_t, size * size * 4> pixels = {};
+        for (uint32_t y = 0; y < size; ++y) {
+            for (uint32_t x = 0; x < size; ++x) {
+                const bool dark = ((x / 8) ^ (y / 8)) & 1;
+                const size_t p = (y * size + x) * 4;
+                pixels[p + 0] = dark ? 24 : 255;
+                pixels[p + 1] = dark ? 108 : 228;
+                pixels[p + 2] = dark ? 244 : 76;
+                pixels[p + 3] = 255;
+            }
+        }
+        Check(allocator_->Reset(), L"Upload allocator Reset");
+        Check(list_->Reset(allocator_.Get(), nullptr), L"Upload command list Reset");
+        gfxd3d12::TextureUpload upload;
+        Check(gfxd3d12::upload_linear_rgba8(
+                  device_.Get(), list_.Get(), pixels.data(), size, size, upload),
+              L"Upload RGBA8 checker");
+        Check(list_->Close(), L"Upload command list Close");
+        ID3D12CommandList* commands[] = {list_.Get()};
+        queue_->ExecuteCommandLists(1, commands);
+        const UINT64 submitted = ++fenceValue_;
+        Check(queue_->Signal(fence_.Get(), submitted), L"Texture upload Signal");
+        if (fence_->GetCompletedValue() < submitted) {
+            Check(fence_->SetEventOnCompletion(submitted, fenceEvent_),
+                  L"Texture upload SetEventOnCompletion");
+            if (WaitForSingleObjectEx(fenceEvent_, INFINITE, FALSE) != WAIT_OBJECT_0)
+                throw std::runtime_error("Texture upload fence wait failed");
+        }
+        // The staging buffer stays valid until GPU fence completion.
+        texture_ = upload.texture;
+        D3D12_DESCRIPTOR_HEAP_DESC heap = {};
+        heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        heap.NumDescriptors = 1;
+        heap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        Check(device_->CreateDescriptorHeap(&heap,
+              IID_PPV_ARGS(srvHeap_.GetAddressOf())), L"Create SRV heap");
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
+        srv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv.Texture2D.MipLevels = 1;
+        device_->CreateShaderResourceView(texture_.Get(), &srv,
+                                          srvHeap_->GetCPUDescriptorHandleForHeapStart());
+        char message[200] = {};
+        sprintf_s(message,
+                  "RGBA8 checker texture upload COMPLETE: 48x48, source row=192, GPU row=%u, bytes=%llu, SRV ready",
+                  upload.row_pitch, static_cast<unsigned long long>(upload.uploaded_bytes));
+        Log(message);
+    }
+
     void InitPipeline() {
+        D3D12_DESCRIPTOR_RANGE range = {};
+        range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+        range.NumDescriptors = 1;
+        range.BaseShaderRegister = 0;
+        range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+        D3D12_ROOT_PARAMETER parameter = {};
+        parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        parameter.DescriptorTable.NumDescriptorRanges = 1;
+        parameter.DescriptorTable.pDescriptorRanges = &range;
+        parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        D3D12_STATIC_SAMPLER_DESC sampler = {};
+        sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+        sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        sampler.MaxLOD = D3D12_FLOAT32_MAX;
+        sampler.MaxAnisotropy = 1;
+        sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
         D3D12_ROOT_SIGNATURE_DESC signature = {};
+        signature.NumParameters = 1;
+        signature.pParameters = &parameter;
+        signature.NumStaticSamplers = 1;
+        signature.pStaticSamplers = &sampler;
         signature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
         ComPtr<ID3DBlob> serialized, errors;
         Check(D3D12SerializeRootSignature(&signature, D3D_ROOT_SIGNATURE_VERSION_1,
@@ -212,6 +295,8 @@ private:
         Check(device_->CreateGraphicsPipelineState(&desc,
               IID_PPV_ARGS(pipeline_.GetAddressOf())), L"CreateGraphicsPipelineState");
     }
+    ComPtr<ID3D12Resource> texture_;
+    ComPtr<ID3D12DescriptorHeap> srvHeap_;
     ComPtr<ID3D12RootSignature> rootSignature_;
     ComPtr<ID3D12PipelineState> pipeline_;
     ComPtr<ID3D12Device> device_;
@@ -253,7 +338,7 @@ public:
         // First pump WinRT activation, THEN initialize D3D12 and LocalState logging.
         window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
         OpenLog();
-        Log("NSMBU Xbox GX2 format probe v0.1.7 started");
+        Log("NSMBU Xbox RGBA8 Texture Probe v0.1.8 started");
         if (!gfxd3d12::format_mapping_self_test()) {
             Log("GX2->DXGI format mapping self-test FAILED");
         } else {
@@ -262,7 +347,7 @@ public:
         try {
             Log("Starting D3D12 backend");
             D3D12Smoke graphics(reinterpret_cast<IUnknown*>(window_));
-            Log("D3D12 backend ready; rendering triangle and polling Xbox Gamepad");
+            Log("D3D12 backend ready; rendering textured quad and polling Xbox Gamepad");
             bool oldA = false;
             bool warningLogged = false;
             while (!closed_) {
