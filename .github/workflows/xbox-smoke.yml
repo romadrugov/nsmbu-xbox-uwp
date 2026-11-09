@@ -1,4 +1,4 @@
-name: NSMBU Xbox - Safe Local RPX Inspection Probe
+name: NSMBU Xbox - Cafe RPX Inspection Patch 0.6.1
 
 on:
   push:
@@ -103,7 +103,7 @@ jobs:
         with:
           name: nsmbu-xbox-smoke
           path: |
-            xbox/smoke/output/NSMBUXboxSmoke_0.6.0.0_x64.appx
+            xbox/smoke/output/NSMBUXboxSmoke_0.6.1.0_x64.appx
             xbox/smoke/output/NSMBUXboxSmoke.cer
             xbox/smoke/output/Microsoft.VCLibs.x64.14.00.appx
           if-no-files-found: error
