@@ -27,6 +27,10 @@ using Microsoft::WRL::ComPtr;
 using namespace Windows::ApplicationModel::Core;
 using namespace Windows::UI::Core;
 
+// The Clang-compiled function is generated from recomp/android_fixture.py's
+// tiny open-source PowerPC RPX and linked into this MSVC UWP executable.
+extern "C" int nsmbu_fixture_return_42(void);
+
 namespace NSMBUXboxSmoke {
 constexpr UINT kBufferCount = 2;
 HANDLE gLogFile = INVALID_HANDLE_VALUE;
@@ -55,6 +59,87 @@ void OpenLog() noexcept {
     } catch (...) {
         OutputDebugStringA("NSMBU Xbox: failed to locate LocalState\n");
     }
+}
+
+
+
+void RunPpcMemoryProbe() noexcept {
+    // This reserves 4 GiB of VIRTUAL ADDRESS SPACE. It never commits 4 GiB,
+    // which could exceed Xbox UWP app RAM limits. Only one 64 KiB guest slice
+    // is committed and checked. Use the PPC_MEM_BASE from runtime/include/ppc.h.
+    constexpr SIZE_T kGuestRange = static_cast<SIZE_T>(0x100000000ull);
+    constexpr SIZE_T kGuestOffset = static_cast<SIZE_T>(0x10000000ull);
+    constexpr SIZE_T kCommit = 64 * 1024;
+    void* const fixedAddress = reinterpret_cast<void*>(static_cast<uintptr_t>(0x200000000000ull));
+    bool fixed = true;
+    bool writeWatch = true;
+    void* region = VirtualAllocFromApp(fixedAddress, kGuestRange,
+                                       MEM_RESERVE | MEM_WRITE_WATCH, PAGE_NOACCESS);
+    if (!region) {
+        const DWORD error = GetLastError();
+        char line[180] = {};
+        sprintf_s(line, "PPC memory FIXED 4GiB reserve with WRITE_WATCH FAILED: Win32=%lu",
+                  static_cast<unsigned long>(error));
+        Log(line);
+        writeWatch = false;
+        region = VirtualAllocFromApp(fixedAddress, kGuestRange,
+                                     MEM_RESERVE, PAGE_NOACCESS);
+    }
+    if (!region) {
+        const DWORD error = GetLastError();
+        char line[170] = {};
+        sprintf_s(line, "PPC memory FIXED 4GiB reserve FAILED: Win32=%lu",
+                  static_cast<unsigned long>(error));
+        Log(line);
+        fixed = false;
+        region = VirtualAllocFromApp(nullptr, kGuestRange,
+                                     MEM_RESERVE, PAGE_NOACCESS);
+    }
+    if (!region) {
+        const DWORD error = GetLastError();
+        char line[170] = {};
+        sprintf_s(line, "PPC memory ANYWHERE 4GiB reserve FAILED: Win32=%lu",
+                  static_cast<unsigned long>(error));
+        Log(line);
+        return;
+    }
+    {
+        char line[200] = {};
+        sprintf_s(line, "PPC memory 4GiB virtual reservation PASSED: %s, write-watch=%s, base=%p",
+                  fixed ? "FIXED" : "ANYWHERE", writeWatch ? "yes" : "no", region);
+        Log(line);
+    }
+    auto* guest = static_cast<unsigned char*>(region) + kGuestOffset;
+    auto* page = static_cast<unsigned char*>(
+        VirtualAllocFromApp(guest, kCommit, MEM_COMMIT, PAGE_READWRITE));
+    if (!page) {
+        char line[140] = {};
+        sprintf_s(line, "PPC memory 64KiB commit FAILED: Win32=%lu",
+                  static_cast<unsigned long>(GetLastError()));
+        Log(line);
+    } else {
+        page[0] = 0x42;
+        page[kCommit - 1] = 0x99;
+        if (page[0] == 0x42 && page[kCommit - 1] == 0x99)
+            Log("PPC memory 64KiB guest slice read/write PASSED");
+        else
+            Log("PPC memory guest slice read/write FAILED");
+    }
+    if (!VirtualFree(region, 0, MEM_RELEASE)) {
+        char line[140] = {};
+        sprintf_s(line, "PPC memory VirtualFree FAILED: Win32=%lu",
+                  static_cast<unsigned long>(GetLastError()));
+        Log(line);
+    }
+}
+
+void RunTranslatedPpcFixtureProbe() noexcept {
+    Log("PPC fixture: calling generated native x64 code from synthetic 3-instruction RPX");
+    const int value = nsmbu_fixture_return_42();
+    char message[140] = {};
+    sprintf_s(message, "PPC fixture generated code RESULT: %d (%s)", value,
+              value == 42 ? "PASSED" : "FAILED");
+    Log(message);
 }
 
 
@@ -406,7 +491,9 @@ public:
         // First pump WinRT activation, THEN initialize D3D12 and LocalState logging.
         window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
         OpenLog();
-        Log("NSMBU Xbox render::Backend Probe v0.3.0 started");
+        Log("NSMBU Xbox PPC CPU / Memory Probe v0.4.0 started");
+        RunPpcMemoryProbe();
+        RunTranslatedPpcFixtureProbe();
         if (!gfxd3d12::format_mapping_self_test()) {
             Log("GX2->DXGI format mapping self-test FAILED");
         } else {
