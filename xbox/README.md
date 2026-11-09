@@ -53,3 +53,21 @@ Never put Wii U dumps, extracted `code/content/meta`, keys, `.rpx`,
 generated `code_*.c` or game resources in GitHub commits or CI artifacts.
 The public workflow packages **only** this independent smoke test.
 Keep your tested `USA_V0` files on your Mac.
+
+### Diagnosing Xbox startup exits (diagnostic build 0.1.1)
+
+The first smoke app exited on the console immediately after its splash screen.
+The diagnostic build logs every D3D12 initialization HRESULT and first presented
+frame to `LocalState/nsmbu_xbox_diag.txt`.
+
+1. Deploy the **0.1.1** AppX from the latest successful `NSMBU Xbox - D3D12 Smoke` run.
+2. Launch on Series S. If rendering fails, it should now remain open with a
+   blank view rather than exit automatically; this is intentional.
+3. On the Mac, open `https://<console-ip>:11443` → **File Explorer** →
+   **LocalAppData** → **Romadrugov.NSMBUXboxSmoke** (or the package's full identity)
+   → **LocalState**. Download `nsmbu_xbox_diag.txt`.
+4. Share the contents, especially the last successful API and any `0x...` HRESULT.
+
+If the file is **missing**, the app likely fails before `Run()` can initialize
+LocalState, so check the Device Portal's crash/error diagnostics instead.
+Don't confuse the splash screen with a successfully presented D3D12 frame.
