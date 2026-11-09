@@ -25,7 +25,8 @@ jobs:
         with:
           name: nsmbu-xbox-smoke
           path: |
-            xbox/smoke/output/NSMBUXboxSmoke_0.1.3.0_x64.appx
+            xbox/smoke/output/NSMBUXboxSmoke_0.1.4.0_x64.appx
             xbox/smoke/output/NSMBUXboxSmoke.cer
+            xbox/smoke/output/Microsoft.VCLibs.x64.14.00.appx
           if-no-files-found: error
           retention-days: 7
