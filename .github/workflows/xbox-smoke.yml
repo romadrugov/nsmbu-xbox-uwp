@@ -1,4 +1,4 @@
-name: NSMBU Xbox - Public Headless Runtime Bootstrap Probe
+name: NSMBU Xbox - Safe Local RPX Inspection Probe
 
 on:
   push:
@@ -19,6 +19,8 @@ on:
       - "runtime/include/ppc.h"
       - "runtime/src/core/headless_dispatch.*"
       - "runtime/src/core/xbox_guest_vm.*"
+      - "runtime/src/core/rpx_inspect.*"
+      - "runtime/test/rpx_inspect_test.cpp"
       - "runtime/test/headless_boot_test.c"
       - "runtime/include/recomp_table.h"
       - ".github/workflows/xbox-smoke.yml"
@@ -73,6 +75,12 @@ jobs:
             -o "$RUNNER_TEMP/ppc-public-fixture-run"
           "$RUNNER_TEMP/ppc-public-fixture-run"
           echo "PUBLIC RPX -> C -> native Clang executable: return 42 PASSED"
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -I runtime/src runtime/src/core/rpx_inspect.cpp \
+            runtime/test/rpx_inspect_test.cpp \
+            -o "$RUNNER_TEMP/rpx_inspect_test"
+          "$RUNNER_TEMP/rpx_inspect_test" "$RUNNER_TEMP/ppc-public-fixture/synthetic.rpx"
+          echo "PUBLIC RPX validated, malformed ELF images rejected"
           clang -std=c11 -O2 -I runtime/include -I runtime/src \
             -I xbox/smoke -I "$fixture_dir" \
             "${generated[@]}" "$fixture_dir/table.c" \
@@ -95,7 +103,7 @@ jobs:
         with:
           name: nsmbu-xbox-smoke
           path: |
-            xbox/smoke/output/NSMBUXboxSmoke_0.5.0.0_x64.appx
+            xbox/smoke/output/NSMBUXboxSmoke_0.6.0.0_x64.appx
             xbox/smoke/output/NSMBUXboxSmoke.cer
             xbox/smoke/output/Microsoft.VCLibs.x64.14.00.appx
           if-no-files-found: error
