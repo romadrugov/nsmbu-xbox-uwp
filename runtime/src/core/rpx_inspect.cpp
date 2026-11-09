@@ -3,6 +3,12 @@
 #include <cstdio>
 #include <utility>
 
+// Portable MIT-licensed DEFLATE/zlib decoder. Only used for the bounded
+// section-name table, never to load or execute guest code.
+#define SINFL_NO_SIMD
+#define SINFL_IMPLEMENTATION
+#include "third_party/sinfl.h"
+
 namespace xboxrpx {
 namespace {
 constexpr size_t kElfHeader = 52;
@@ -88,21 +94,55 @@ bool inspect(const uint8_t* bytes, size_t count,
     }
 
     const Raw& str = raw[shstrndx];
-    if (str.type == kNoBits || (str.flags & kZlibFlag) ||
-        str.file_size == 0 || str.file_size > (1u<<20))
+    if (str.type == kNoBits || str.file_size == 0 ||
+        str.file_size > (1u<<20))
         return fail(error, "invalid section-name string table");
-    const uint8_t* names = bytes + str.off;
+
+    std::vector<uint8_t> decodedNames;
+    if ((str.flags & kZlibFlag) != 0u) {
+        // Cafe OS SHF_RPL_ZLIB: big-endian uncompressed size (4 bytes),
+        // followed by a normal RFC1950 zlib stream (DEFLATE + Adler32).
+        if (str.file_size < 10)
+            return fail(error, "compressed section-name table too short");
+        const uint32_t outputLen = u32(bytes + str.off);
+        if (outputLen == 0 || outputLen > (1u<<20))
+            return fail(error, "invalid decompressed section-name table size");
+        const size_t streamLen = str.file_size - 4u;
+        const uint8_t* stream = bytes + str.off + 4u;
+        const unsigned zlibHeader = (unsigned(stream[0]) << 8u) | stream[1];
+        if ((stream[0] & 15u) != 8u || (stream[0] >> 4u) > 7u ||
+            (zlibHeader % 31u) != 0u || (stream[1] & 0x20u) != 0u)
+            return fail(error, "unsupported zlib header in section-name table");
+        // sinfl may use speculative byte reads/copies at bitstream edges:
+        // pad both buffers; cap actual decompressed data to 1 MiB.
+        std::vector<uint8_t> paddedInput(streamLen + 64u, 0);
+        std::memcpy(paddedInput.data(), stream, streamLen);
+        std::vector<uint8_t> paddedOutput(size_t(outputLen) + 64u, 0);
+        const int got = zsinflate(paddedOutput.data(), int(outputLen),
+                                  paddedInput.data(), int(streamLen));
+        if (got != int(outputLen))
+            return fail(error, "section-name zlib decompression failed (size/checksum)");
+        decodedNames.assign(paddedOutput.begin(), paddedOutput.begin() + outputLen);
+    } else {
+        decodedNames.assign(bytes + str.off, bytes + str.off + str.file_size);
+    }
+    if (decodedNames.empty() || decodedNames[0] != 0u)
+        return fail(error, "section-name table missing leading NUL");
+    const uint8_t* names = decodedNames.data();
+    const size_t namesCount = decodedNames.size();
     Image tmp;
+    tmp.section_names_compressed = (str.flags & kZlibFlag) != 0u;
+    tmp.section_names_decoded_bytes = namesCount;
     tmp.elf_type = elfType;
     tmp.machine = machine;
     tmp.os_abi = bytes[7];
     tmp.entry = entry;
     bool entryIsText = false;
     for (const Raw& r : raw) {
-        if (r.name >= str.file_size)
+        if (r.name >= namesCount)
             return fail(error, "section name offset outside string table");
         const char* name = reinterpret_cast<const char*>(names + r.name);
-        const void* terminator = std::memchr(name, 0, str.file_size - r.name);
+        const void* terminator = std::memchr(name, 0, namesCount - r.name);
         if (!terminator)
             return fail(error, "unterminated section name");
         Section sec;
