@@ -181,13 +181,13 @@ private:
 
 public ref class App sealed : IFrameworkView {
 public:
-    virtual void Initialize(CoreApplicationView^) {}
+    virtual void Initialize(CoreApplicationView^ applicationView) { (void)applicationView; }
     virtual void SetWindow(CoreWindow^ window) {
         window_ = window;
         window_->Closed += ref new Windows::Foundation::TypedEventHandler<
             CoreWindow^, CoreWindowEventArgs^>(this, &App::OnClosed);
     }
-    virtual void Load(Platform::String^) {}
+    virtual void Load(Platform::String^ entryPoint) { (void)entryPoint; }
     virtual void Run() {
         OpenLog();
         Log("NSMBU Xbox smoke diagnostic v0.1.1 started");
