@@ -53,7 +53,7 @@ private:
     }
 
     bool closed_ = false;
-    Platform::Agile<CoreWindow> window_;
+    CoreWindow^ window_ = nullptr;
 };
 
 ref class SmokeViewSource sealed : IFrameworkViewSource {
