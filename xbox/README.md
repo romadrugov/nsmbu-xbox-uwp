@@ -125,3 +125,19 @@ The previous triangle and A-button test remain intact.
 D24S8 conversions, GX2 shader decompilation, descriptor bindings,
 the full `render::Backend` dispatch, or loading commercial game assets.
 This is the start of a real game-facing D3D12 layer, not the finished port.
+
+
+## Milestone 1.1 — GPU texture upload and sampling (0.1.8)
+
+Added reusable linear RGBA8 upload code in `runtime/src/gfx/d3d12/texture_upload.h` and `.cpp`.
+It creates a DEFAULT-heap GPU texture, computes padded row strides via `GetCopyableFootprints`,
+copies linear CPU pixels into an UPLOAD buffer, executes `CopyTextureRegion` and a transition
+to `PIXEL_SHADER_RESOURCE`, retaining the staging resource until the upload fence completes.
+The self-generated 48x48 checkerboard has 192 bytes per original row and 256 bytes per GPU row,
+so this probes the D3D12 alignment rule, not just texture creation.
+A shader-visible SRV descriptor at t0 and a point static sampler at s0 provide textured drawing;
+the Xbox controller A button continues to change the background color.
+
+**Expected Xbox result:** a large square cyan/cream checkerboard over the pulsing teal background.
+The log should include `RGBA8 checker texture upload COMPLETE: 48x48, source row=192, GPU row=256`.
+This is not GX2 untile/swizzle support, mipmapping, resource caching or full shader translation yet.
