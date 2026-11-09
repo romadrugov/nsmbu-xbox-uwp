@@ -33,6 +33,15 @@ if ($LASTEXITCODE -ne 0) { throw 'HLSL PS compilation failed' }
 & (Join-Path $PSScriptRoot 'build-ppc-fixture.ps1')
 if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'PPC fixture build failed' }
 
+# Embed ONLY the public 3-instruction PowerPC ELF and known SHA fingerprints.
+# User-supplied red-pro2.rpx is never part of CI or the resulting AppX.
+$publicRpx = Join-Path $env:RUNNER_TEMP 'nsmbu-xbox-public-ppc-fixture/synthetic.rpx'
+$publicHeader = Join-Path $PSScriptRoot 'generated/PublicRpxFixture.h'
+& py -3 (Join-Path $PSScriptRoot 'make_public_rpx_header.py') $publicRpx $publicHeader
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $publicHeader)) {
+    throw 'Public RPX metadata/header generation failed'
+}
+
 $project = Join-Path $PSScriptRoot 'NSMBUXboxSmoke.vcxproj'
 $buildArgs = @(
     $project, '/t:Build', '/m', '/v:minimal',
@@ -112,7 +121,7 @@ if (-not (Test-Path $makeappx) -or -not (Test-Path $signtool)) {
     throw 'Windows SDK app packaging tools missing'
 }
 
-$appx = Join-Path $out 'NSMBUXboxSmoke_0.5.0.0_x64.appx'
+$appx = Join-Path $out 'NSMBUXboxSmoke_0.6.0.0_x64.appx'
 $cer = Join-Path $out 'NSMBUXboxSmoke.cer'
 $pfx = Join-Path $env:RUNNER_TEMP 'nsmbu-smoke-private.pfx'
 $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=NSMBUXbox' -CertStoreLocation 'Cert:\CurrentUser\My' -KeyAlgorithm RSA -KeyLength 2048 -KeyExportPolicy Exportable -HashAlgorithm SHA256 -NotAfter (Get-Date).AddYears(1)
