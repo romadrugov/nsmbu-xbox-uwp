@@ -28,6 +28,11 @@ if ($LASTEXITCODE -ne 0) { throw 'HLSL VS compilation failed' }
 if ($LASTEXITCODE -ne 0) { throw 'HLSL PS compilation failed' }
 
 
+# Generate and compile actual recompiler output from the public tiny RPX.
+# This builds a library with clang-cl and links it into the MSVC/C++-CX UWP exe.
+& (Join-Path $PSScriptRoot 'build-ppc-fixture.ps1')
+if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'PPC fixture build failed' }
+
 $project = Join-Path $PSScriptRoot 'NSMBUXboxSmoke.vcxproj'
 $buildArgs = @(
     $project, '/t:Build', '/m', '/v:minimal',
@@ -107,7 +112,7 @@ if (-not (Test-Path $makeappx) -or -not (Test-Path $signtool)) {
     throw 'Windows SDK app packaging tools missing'
 }
 
-$appx = Join-Path $out 'NSMBUXboxSmoke_0.3.0.0_x64.appx'
+$appx = Join-Path $out 'NSMBUXboxSmoke_0.4.0.0_x64.appx'
 $cer = Join-Path $out 'NSMBUXboxSmoke.cer'
 $pfx = Join-Path $env:RUNNER_TEMP 'nsmbu-smoke-private.pfx'
 $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=NSMBUXbox' -CertStoreLocation 'Cert:\CurrentUser\My' -KeyAlgorithm RSA -KeyLength 2048 -KeyExportPolicy Exportable -HashAlgorithm SHA256 -NotAfter (Get-Date).AddYears(1)
