@@ -14,8 +14,9 @@ constexpr size_t kMaxLocal = 96u * 1024u * 1024u;
 
 void log_image(const xboxrpx::Image& image, void (*log)(const char*), const char* which) {
     char line[270] = {};
-    sprintf_s(line, "[rpx/0.6] %s: entry=%08X sections=%zu mapped=%zu mapped-bytes=%llu compressed=%zu",
-        which, image.entry, image.sections.size(), image.mapped_count,
+    sprintf_s(line, "[rpx/0.6] %s: ELF type=%04X machine=%04X osabi=%02X entry=%08X sections=%zu mapped=%zu mapped-bytes=%llu compressed=%zu",
+        which, unsigned(image.elf_type), unsigned(image.machine), unsigned(image.os_abi),
+        image.entry, image.sections.size(), image.mapped_count,
         static_cast<unsigned long long>(image.mapped_bytes), image.compressed_count);
     log(line);
     if (const auto* text = xboxrpx::section_named(image, ".text")) {
@@ -24,6 +25,29 @@ void log_image(const xboxrpx::Image& image, void (*log)(const char*), const char
             text->compressed ? "yes" : "no");
         log(line);
     }
+}
+
+void log_elf_header_preview(const std::vector<uint8_t>& bytes, void (*log)(const char*)) {
+    // Display the raw ELF identification even if later section validation
+    // rejects the file. No Nintendo data or section contents are logged.
+    if (bytes.size() < 52 || std::memcmp(bytes.data(), "\x7f" "ELF", 4) != 0) {
+        log("[rpx/0.6] LOCAL header: missing or truncated ELF magic");
+        return;
+    }
+    auto be16 = [&](size_t n) {
+        return unsigned(bytes[n]) * 256u + unsigned(bytes[n+1]);
+    };
+    auto be32 = [&](size_t n) {
+        return (unsigned(bytes[n]) << 24u) | (unsigned(bytes[n+1]) << 16u) |
+               (unsigned(bytes[n+2]) << 8u) | unsigned(bytes[n+3]);
+    };
+    char line[280] = {};
+    sprintf_s(line,
+              "[rpx/0.6] LOCAL ELF header: class=%u endian=%u osabi=%02X type=%04X machine=%04X version=%u entry=%08X shoff=%08X shnum=%u shstrndx=%u",
+              unsigned(bytes[4]), unsigned(bytes[5]), unsigned(bytes[7]),
+              be16(16), be16(18), be32(20), be32(24), be32(32),
+              be16(48), be16(50));
+    log(line);
 }
 
 bool read_local(const std::wstring& path, std::vector<uint8_t>& bytes, DWORD& error) {
@@ -129,13 +153,9 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*)) {
         char line[180] = {};
         sprintf_s(line, "[rpx/0.6] LOCAL image read: %zu bytes (not executed)", data.size());
         log(line);
-        xboxrpx::Image image;
-        if (!xboxrpx::inspect(data.data(), data.size(), image, error)) {
-            log("[rpx/0.6] LOCAL structural validation FAILED");
-            log(error.c_str());
-            return;
-        }
-        log_image(image, log, "LOCAL");
+        log_elf_header_preview(data, log);
+        // Hash-based build identification is independent of ELF section
+        // validation, so even a rejected RPX still reports its known version.
         std::string fingerprint;
         if (!sha256_hex(data, fingerprint)) {
             log("[rpx/0.6] LOCAL SHA256 calculation FAILED");
@@ -154,6 +174,14 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*)) {
         } else {
             log("[rpx/0.6] LOCAL SHA256 NOT recognized by recomp/builds.py; no code execution");
         }
+
+        xboxrpx::Image image;
+        if (!xboxrpx::inspect(data.data(), data.size(), image, error)) {
+            log("[rpx/0.6] LOCAL structural validation FAILED");
+            log(error.c_str());
+            return;
+        }
+        log_image(image, log, "LOCAL");
         // Explicitly no decompression, relocations, guest mapping or execution
         // of the locally uploaded copyrighted image in this version.
         log("[rpx/0.6] LOCAL inspection finished; execution DISABLED");
