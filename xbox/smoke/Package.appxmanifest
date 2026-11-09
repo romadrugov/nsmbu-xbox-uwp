@@ -7,7 +7,7 @@
   <Identity Name="Romadrugov.NSMBUXboxSmoke" Publisher="CN=NSMBUXbox" Version="0.1.6.0" ProcessorArchitecture="x64" />
   <mp:PhoneIdentity PhoneProductId="5ca726b3-c8ae-40d2-909a-8d14e266d4b4" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
-    <DisplayName>NSMBU Xbox Shader & Input Probe</DisplayName>
+    <DisplayName>NSMBU Xbox Shader and Input Probe</DisplayName>
     <PublisherDisplayName>NSMBU Xbox Project</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
