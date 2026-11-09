@@ -49,7 +49,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
-      <AdditionalDependencies>$(ProjectDir)generated\\guest_fixture.lib;d3d12.lib;dxgi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(ProjectDir)generated\\guest_fixture.lib;d3d12.lib;dxgi.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -60,6 +60,8 @@
     <ClCompile Include="..\\..\\runtime\\src\\gfx\\d3d12\\gx2_macro_detile.cpp" />
     <ClCompile Include="..\\..\\runtime\\src\\gfx\\d3d12\\backend_probe.cpp" />
     <ClCompile Include="..\\..\\runtime\\src\\core\\xbox_guest_vm.cpp" />
+    <ClCompile Include="..\\..\\runtime\\src\\core\\rpx_inspect.cpp" />
+    <ClCompile Include="RpxProbe.cpp" />
   </ItemGroup>
   <ItemGroup><AppxManifest Include="Package.appxmanifest" /></ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
