@@ -209,7 +209,7 @@ private:
         desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         desc.SampleDesc.Count = 1;
         Check(device_->CreateGraphicsPipelineState(&desc,
-              IID_PPV_ARGS(pipeline_.Get())), L"CreateGraphicsPipelineState");
+              IID_PPV_ARGS(pipeline_.GetAddressOf())), L"CreateGraphicsPipelineState");
     }
     ComPtr<ID3D12RootSignature> rootSignature_;
     ComPtr<ID3D12PipelineState> pipeline_;
