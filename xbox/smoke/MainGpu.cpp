@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstring>
 #include <exception>
+#include "gfx/d3d12/format_map.h"
 #include <climits>
 #include "GpuShadersVS.h"
 #include "GpuShadersPS.h"
@@ -252,7 +253,12 @@ public:
         // First pump WinRT activation, THEN initialize D3D12 and LocalState logging.
         window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
         OpenLog();
-        Log("NSMBU Xbox GPU smoke v0.1.5 started");
+        Log("NSMBU Xbox GX2 format probe v0.1.7 started");
+        if (!gfxd3d12::format_mapping_self_test()) {
+            Log("GX2->DXGI format mapping self-test FAILED");
+        } else {
+            Log("GX2->DXGI format mapping self-test PASSED (RGBA8, sRGB, BC1, BC5, D16, unsupported)");
+        }
         try {
             Log("Starting D3D12 backend");
             D3D12Smoke graphics(reinterpret_cast<IUnknown*>(window_));

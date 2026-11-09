@@ -1,4 +1,4 @@
-name: NSMBU Xbox - Shader and Gamepad Probe
+name: NSMBU Xbox - GX2 DXGI Format Probe
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
         with:
           name: nsmbu-xbox-smoke
           path: |
-            xbox/smoke/output/NSMBUXboxSmoke_0.1.6.0_x64.appx
+            xbox/smoke/output/NSMBUXboxSmoke_0.1.7.0_x64.appx
             xbox/smoke/output/NSMBUXboxSmoke.cer
             xbox/smoke/output/Microsoft.VCLibs.x64.14.00.appx
           if-no-files-found: error

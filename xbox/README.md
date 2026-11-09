@@ -106,3 +106,22 @@ working v0.1.5 swapchain. The Xbox controller's A button is sampled through
 release to return to pulsing blue. If Gamepad fails, the triangle should still
 render and an HRESULT is recorded once. `MainLifecycle.cpp` is retained as a
 known-good fallback, and the app still contains no Nintendo game data.
+
+## Milestone 1.0 — first shared NSMBU graphics code on Xbox (0.1.7)
+
+`runtime/src/gfx/d3d12/format_map.{h,cpp}` is the first reusable part of
+the future renderer backend. It converts a **deliberately limited**, verified
+subset of Wii U GX2 numeric pixel formats into native DXGI format enums:
+RGBA8, R8, RG8, R16, 16/32-bit float formats and BC1–BC5 blocks.
+All unimplemented / conversion-requiring formats explicitly return
+`DXGI_FORMAT_UNKNOWN` rather than silently producing incorrect colors.
+
+The 0.1.7 probe compiles the actual source file into the existing UWP
+app and runs a runtime self-test for RGBA8, sRGB, BC1, BC5 SNORM, D16
+and unsupported RGB565, logging the result in `LocalState`.
+The previous triangle and A-button test remain intact.
+
+**Not implemented yet:** Wii U texture tiling/swizzling, endian fixes,
+D24S8 conversions, GX2 shader decompilation, descriptor bindings,
+the full `render::Backend` dispatch, or loading commercial game assets.
+This is the start of a real game-facing D3D12 layer, not the finished port.
