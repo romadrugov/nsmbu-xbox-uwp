@@ -33,6 +33,35 @@ int main(int argc, char** argv) {
         return 1;
     }
     // All rejected inputs must leave caller's previous valid Image untouched.
+    // A real Wii U RPX/RPL carries Cafe OS e_type=0xFE01 and usually
+    // OSABI=0xCA, unlike the synthetic public ET_EXEC fixture. The same
+    // section layout must remain valid under both accepted ELF types.
+    std::vector<uint8_t> cafe = bytes;
+    cafe[16] = 0xFE; cafe[17] = 0x01;
+    cafe[7] = 0xCA;
+    xboxrpx::Image cafeImage;
+    if (!xboxrpx::inspect(cafe.data(), cafe.size(), cafeImage, reason) ||
+        cafeImage.elf_type != 0xFE01u || cafeImage.machine != 20u ||
+        cafeImage.os_abi != 0xCAu || cafeImage.entry != 0x02000000u ||
+        !xboxrpx::section_named(cafeImage, ".text")) {
+        std::fprintf(stderr, "Cafe OS 0xFE01 fixture rejected: %s\n", reason.c_str());
+        return 1;
+    }
+    if (image.elf_type != 2u || image.machine != 20u)
+        return 1; // Public ELF must still parse as conventional ET_EXEC.
+    auto unsupported = cafe;
+    unsupported[17] = 0x02; // unsupported Cafe/vendor type 0xFE02
+    if (!rejected(unsupported)) return 1;
+    unsupported = cafe;
+    unsupported[16] = 0; unsupported[17] = 3; // ET_DYN is not a Cafe RPX
+    if (!rejected(unsupported)) return 1;
+    unsupported = cafe;
+    unsupported[18] = 0; unsupported[19] = 3; // reject wrong CPU even in Cafe mode
+    if (!rejected(unsupported)) return 1;
+    unsupported = cafe;
+    unsupported[23] = 2; // bad header version
+    if (!rejected(unsupported)) return 1;
+
     const auto savedEntry = image.entry;
     auto failsWithoutMutation = [&](const std::vector<uint8_t>& broken) {
         if (!rejected(broken)) return false;
