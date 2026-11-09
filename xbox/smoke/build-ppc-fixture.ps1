@@ -39,16 +39,21 @@ if (-not (Test-Path $libExe)) { throw "No MSVC librarian: $libExe" }
 $output = Join-Path $PSScriptRoot 'generated'
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $objects = @()
-# Compile generated translated functions only. The generated harness,
-# table, and import table are desktop test metadata, not part of UWP.
+# The generated table.c contains the actual recompilation address map
+# (RecompEntry, RecompImport, entry point). It is needed for headless boot.
+# imports.c contains weak desktop stubs; the public fixture has no HLE imports.
 $sources = @(Get-ChildItem $generated -Filter '*.c' -File |
-    Where-Object { $_.Name -notin @('harness.c','table.c','imports.c') })
-if ($sources.Count -lt 1) { throw 'No PowerPC-generated C function source files' }
+    Where-Object { $_.Name -notin @('harness.c','imports.c') })
+if (-not (Test-Path (Join-Path $generated 'table.c'))) {
+    throw 'Recompiler did not emit table.c'
+}
+if ($sources.Count -lt 2) { throw 'Generated PowerPC functions or table.c missing' }
+$sources += (Get-Item (Join-Path $repoRoot 'runtime/src/core/headless_dispatch.c'))
 $sources += (Get-Item (Join-Path $PSScriptRoot 'ppc_fixture_bridge.c'))
 foreach ($file in $sources) {
     $obj = Join-Path $output ($file.BaseName + '.obj')
     & $clang /nologo /c /O2 /MD /clang:-std=c11 `
-        "/I$generated" "/I$(Join-Path $repoRoot 'runtime/include')" `
+        "/I$generated" "/I$(Join-Path $repoRoot 'runtime/include')" "/I$(Join-Path $repoRoot 'runtime/src')" `
         "/Fo$obj" $file.FullName
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $obj)) {
         throw "clang-cl failed compiling $($file.Name)"
