@@ -200,3 +200,28 @@ Expected log:
 `GX2 macro 2D thin1 48x48 RGBA8 swizzle 0x500 roundtrip PASSED`.
 No Nintendo assets, keys, or extracted game files are committed.
 This does **not** yet integrate the renderer with `render::Backend`.
+
+
+## Milestone 2.0 — game-facing render::Backend dispatch probe (v0.3.0)
+
+The Xbox UWP test now links the actual runtime/src/gfx/renderer.h
+render::Backend ABI and a partial adapter in runtime/src/gfx/d3d12/backend_probe.{h,cpp}.
+Each frame it dispatches render::clear_color, render::draw, and render::swap.
+The adapter drives the existing Direct3D 12 texture renderer.
+Api::D3D12 is a distinct enum value (not disguised as Vulkan).
+A Linux host unit test validates dispatch, counters, and strict rejection.
+
+IMPORTANT: This is NOT yet a playable GX2 backend. It accepts only the
+synthetic sentinel values kProbeColorTarget and kProbePrimitive.
+Normal guest draw calls, registers, index buffers, color/depth targets,
+shader bytecode, surface copies, and other Backend operations remain
+unsupported. Most other Backend function pointers are deliberately null.
+The full renderer.cpp and GX2 decompiler are not linked into the standalone
+Xbox smoke test; it supplies a test-only render::g_backend symbol.
+Production renderer selection intentionally does NOT use this partial table.
+
+Expected on Xbox: identical checkerboard and A-button response to v0.2.0.
+Log checkpoints: 'render::Backend D3D12 probe attached' and
+'render::Backend dispatch first clear/draw/swap PASSED', plus increasing
+'Presented frame' counters. Frozen rollback: xbox-uwp-stable-0.2.0.
+Next: real GX2 color buffers, draw-state decoding and shader translation.
