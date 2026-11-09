@@ -96,3 +96,13 @@ changes each CI run: uninstall the prior smoke package if an upgrade fails.
 
 This retains the known-good lifecycle-only source in `MainLifecycle.cpp`,
 so a subsequent experiment can switch back without losing the baseline.
+
+## Milestone 0.6 — Shader + Gamepad Probe
+
+Tests the full native D3D12 graphics pipeline by drawing an original, multicolored
+triangle with compiled HLSL Shader Model 5 vertex/pixel shaders. Uses the known
+working v0.1.5 swapchain. The Xbox controller's A button is sampled through
+`Windows.Gaming.Input.Gamepad`. Hold **A** to change the background to green;
+release to return to pulsing blue. If Gamepad fails, the triangle should still
+render and an HRESULT is recorded once. `MainLifecycle.cpp` is retained as a
+known-good fallback, and the app still contains no Nintendo game data.

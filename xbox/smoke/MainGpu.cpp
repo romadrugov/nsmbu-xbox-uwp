@@ -10,6 +10,9 @@
 #include <cstdio>
 #include <cstring>
 #include <exception>
+#include <climits>
+#include "GpuShadersVS.h"
+#include "GpuShadersPS.h"
 using Microsoft::WRL::ComPtr;
 using namespace Windows::ApplicationModel::Core;
 using namespace Windows::UI::Core;
@@ -118,14 +121,16 @@ public:
         if (!fenceEvent_) {
             throw std::runtime_error("CreateEventExW failed");
         }
-        Log("D3D12 initialized");
+        Log("Building D3D12 shader pipeline");
+        InitPipeline();
+        Log("D3D12 shader pipeline initialized");
     }
 
     ~D3D12Smoke() {
         if (fenceEvent_) CloseHandle(fenceEvent_);
     }
 
-    void Draw() {
+    void Draw(bool buttonA) {
         const UINT index = swapChain_->GetCurrentBackBufferIndex();
         Check(allocator_->Reset(), L"Allocator Reset");
         Check(list_->Reset(allocator_.Get(), nullptr), L"CommandList Reset");
@@ -141,9 +146,18 @@ public:
         auto handle = rtvHeap_->GetCPUDescriptorHandleForHeapStart();
         handle.ptr += index * device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
         // Alternating shades confirm the GPU is continuously drawing, rather than showing a static splash.
-        const float pulse = (frame_ / 60) % 2 == 0 ? 0.15f : 0.30f;
+        const float pulse = buttonA ? 0.52f : ((frame_ / 60) % 2 == 0 ? 0.15f : 0.30f);
         const FLOAT clear[4] = {0.05f, pulse, 0.35f, 1.0f};
         list_->ClearRenderTargetView(handle, clear, 0, nullptr);
+        list_->OMSetRenderTargets(1, &handle, FALSE, nullptr);
+        const D3D12_VIEWPORT viewport = {0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f};
+        const D3D12_RECT scissor = {0, 0, 1280, 720};
+        list_->RSSetViewports(1, &viewport);
+        list_->RSSetScissorRects(1, &scissor);
+        list_->SetPipelineState(pipeline_.Get());
+        list_->SetGraphicsRootSignature(rootSignature_.Get());
+        list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        list_->DrawInstanced(3, 1, 0, 0);
 
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -170,6 +184,35 @@ public:
     }
 
 private:
+    void InitPipeline() {
+        D3D12_ROOT_SIGNATURE_DESC signature = {};
+        signature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+        ComPtr<ID3DBlob> serialized, errors;
+        Check(D3D12SerializeRootSignature(&signature, D3D_ROOT_SIGNATURE_VERSION_1,
+              serialized.GetAddressOf(), errors.GetAddressOf()), L"SerializeRootSignature");
+        Check(device_->CreateRootSignature(0, serialized->GetBufferPointer(),
+              serialized->GetBufferSize(), IID_PPV_ARGS(rootSignature_.GetAddressOf())),
+              L"CreateRootSignature");
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = rootSignature_.Get();
+        desc.VS = {gVertexShader, sizeof(gVertexShader)};
+        desc.PS = {gPixelShader, sizeof(gPixelShader)};
+        desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        desc.RasterizerState.DepthClipEnable = TRUE;
+        desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+        desc.DepthStencilState.DepthEnable = FALSE;
+        desc.DepthStencilState.StencilEnable = FALSE;
+        desc.SampleMask = UINT_MAX;
+        desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        desc.NumRenderTargets = 1;
+        desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.SampleDesc.Count = 1;
+        Check(device_->CreateGraphicsPipelineState(&desc,
+              IID_PPV_ARGS(pipeline_.Get())), L"CreateGraphicsPipelineState");
+    }
+    ComPtr<ID3D12RootSignature> rootSignature_;
+    ComPtr<ID3D12PipelineState> pipeline_;
     ComPtr<ID3D12Device> device_;
     ComPtr<ID3D12CommandQueue> queue_;
     ComPtr<IDXGISwapChain3> swapChain_;
@@ -213,10 +256,33 @@ public:
         try {
             Log("Starting D3D12 backend");
             D3D12Smoke graphics(reinterpret_cast<IUnknown*>(window_));
-            Log("D3D12 backend ready; starting color animation");
+            Log("D3D12 backend ready; rendering triangle and polling Xbox Gamepad");
+            bool oldA = false;
+            bool warningLogged = false;
             while (!closed_) {
                 window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
-                if (!closed_) graphics.Draw();
+                if (closed_) break;
+                bool buttonA = false;
+                try {
+                    auto pads = Windows::Gaming::Input::Gamepad::Gamepads;
+                    if (pads->Size > 0) {
+                        auto rd = pads->GetAt(0)->GetCurrentReading();
+                        buttonA = (static_cast<unsigned>(rd.Buttons) &
+                                   static_cast<unsigned>(Windows::Gaming::Input::GamepadButtons::A)) != 0;
+                    }
+                } catch (Platform::Exception^ error) {
+                    if (!warningLogged) {
+                        char msg[100] = {};
+                        sprintf_s(msg, "Gamepad HRESULT=0x%08lX", static_cast<unsigned long>(error->HResult));
+                        Log(msg);
+                        warningLogged = true;
+                    }
+                }
+                if (buttonA != oldA) {
+                    Log(buttonA ? "Gamepad A PRESSED" : "Gamepad A RELEASED");
+                    oldA = buttonA;
+                }
+                graphics.Draw(buttonA);
             }
             Log("Window closed normally");
         } catch (const std::exception& error) {

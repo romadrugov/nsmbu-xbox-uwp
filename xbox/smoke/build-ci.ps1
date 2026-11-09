@@ -19,6 +19,14 @@ $versions = @(Get-ChildItem (Join-Path $sdkRoot 'Include') -Directory |
 if ($versions.Count -eq 0) { throw 'Windows SDK missing' }
 $sdk = $versions[0].Name
 Write-Host "Building with SDK $sdk and VS $vs"
+$fxc = Join-Path $sdkRoot "bin/$sdk/x64/fxc.exe"
+if (-not (Test-Path $fxc)) { throw "Windows SDK fxc.exe missing: $fxc" }
+$shader = Join-Path $PSScriptRoot 'Triangle.hlsl'
+& $fxc /nologo /T vs_5_0 /E VSMain /Fh (Join-Path $PSScriptRoot 'GpuShadersVS.h') /Vn gVertexShader $shader
+if ($LASTEXITCODE -ne 0) { throw 'HLSL VS compilation failed' }
+& $fxc /nologo /T ps_5_0 /E PSMain /Fh (Join-Path $PSScriptRoot 'GpuShadersPS.h') /Vn gPixelShader $shader
+if ($LASTEXITCODE -ne 0) { throw 'HLSL PS compilation failed' }
+
 
 $project = Join-Path $PSScriptRoot 'NSMBUXboxSmoke.vcxproj'
 $buildArgs = @(
@@ -99,7 +107,7 @@ if (-not (Test-Path $makeappx) -or -not (Test-Path $signtool)) {
     throw 'Windows SDK app packaging tools missing'
 }
 
-$appx = Join-Path $out 'NSMBUXboxSmoke_0.1.5.0_x64.appx'
+$appx = Join-Path $out 'NSMBUXboxSmoke_0.1.6.0_x64.appx'
 $cer = Join-Path $out 'NSMBUXboxSmoke.cer'
 $pfx = Join-Path $env:RUNNER_TEMP 'nsmbu-smoke-private.pfx'
 $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=NSMBUXbox' -CertStoreLocation 'Cert:\CurrentUser\My' -KeyAlgorithm RSA -KeyLength 2048 -KeyExportPolicy Exportable -HashAlgorithm SHA256 -NotAfter (Get-Date).AddYears(1)
