@@ -1,0 +1,31 @@
+name: NSMBU Xbox - D3D12 Smoke
+
+on:
+  push:
+    branches: [xbox-uwp]
+    paths:
+      - "xbox/**"
+      - ".github/workflows/xbox-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build signed Xbox UWP test package
+        shell: pwsh
+        run: ./xbox/smoke/build-ci.ps1
+      - name: Upload test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nsmbu-xbox-smoke
+          path: |
+            xbox/smoke/output/NSMBUXboxSmoke_0.1.0.0_x64.appx
+            xbox/smoke/output/NSMBUXboxSmoke.cer
+          if-no-files-found: error
+          retention-days: 7
