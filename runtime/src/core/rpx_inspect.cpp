@@ -7,7 +7,16 @@
 // section-name table, never to load or execute guest code.
 #define SINFL_NO_SIMD
 #define SINFL_IMPLEMENTATION
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+// Upstream C89 single-header initializes POD structures with {0}.
+// Keep our own code under -Werror while not rewriting vendored code.
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
 #include "third_party/sinfl.h"
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 namespace xboxrpx {
 namespace {
