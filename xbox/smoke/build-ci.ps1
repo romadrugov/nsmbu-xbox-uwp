@@ -36,6 +36,22 @@ $exe = Get-ChildItem $PSScriptRoot -Filter 'NSMBUXboxSmoke.exe' -File -Recurse |
 if (-not $exe) { throw 'UWP executable missing after build' }
 Write-Host "Compiled: $($exe.FullName) ($($exe.Length) bytes)"
 
+# Record the exact DLL names imported by the PE. Missing _APP DLLs can
+# prevent Xbox UWP activation before application code and logs start.
+$toolsetRoot = Join-Path $vs 'VC/Tools/MSVC'
+$msvcVersions = @(Get-ChildItem $toolsetRoot -Directory | Sort-Object { [version]$_.Name } -Descending)
+if ($msvcVersions.Count -eq 0) { throw 'MSVC toolset missing' }
+$dumpbin = Join-Path $msvcVersions[0].FullName 'bin/Hostx64/x64/dumpbin.exe'
+if (-not (Test-Path $dumpbin)) { throw "No dumpbin: $dumpbin" }
+Write-Host "==== PE import dependencies ===="
+& $dumpbin /dependents $exe.FullName
+if ($LASTEXITCODE -ne 0) { throw 'dumpbin failed' }
+Write-Host "==== Generated Windows metadata and resources ===="
+Get-ChildItem (Join-Path $PSScriptRoot 'x64') -Recurse -File |
+  Where-Object { $_.Extension -in @('.winmd', '.pri') } |
+  ForEach-Object { Write-Host "$($_.FullName) ($($_.Length) bytes)" }
+
+
 # A graphical Xbox UWP app must not be linked as a Windows console executable.
 # IMAGE_OPTIONAL_HEADER64.Subsystem is 68 bytes from the PE optional header.
 $peBytes = [IO.File]::ReadAllBytes($exe.FullName)
