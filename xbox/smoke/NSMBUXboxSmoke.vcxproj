@@ -57,6 +57,7 @@
     <ClCompile Include="..\\..\\runtime\\src\\gfx\\d3d12\\format_map.cpp" />
     <ClCompile Include="..\\..\\runtime\\src\\gfx\\d3d12\\texture_upload.cpp" />
     <ClCompile Include="..\\..\\runtime\\src\\gfx\\d3d12\\gx2_detile.cpp" />
+    <ClCompile Include="..\\..\\runtime\\src\\gfx\\d3d12\\gx2_macro_detile.cpp" />
   </ItemGroup>
   <ItemGroup><AppxManifest Include="Package.appxmanifest" /></ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

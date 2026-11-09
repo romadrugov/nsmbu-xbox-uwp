@@ -13,6 +13,7 @@
 #include "gfx/d3d12/format_map.h"
 #include "gfx/d3d12/texture_upload.h"
 #include "gfx/d3d12/gx2_detile.h"
+#include "gfx/d3d12/gx2_macro_detile.h"
 #include <array>
 #include <climits>
 #include "GpuShadersVS.h"
@@ -235,12 +236,44 @@ private:
             untiled.size() != pixels.size() ||
             std::memcmp(untiled.data(), pixels.data(), pixels.size()) != 0)
             throw std::runtime_error("GX2 1D thin1 texture roundtrip FAILED");
-        Log("GX2 detile 1D thin1 48x48 RGBA8 roundtrip PASSED; uploading decoded pixels");
+        Log("GX2 detile 1D thin1 48x48 RGBA8 roundtrip PASSED");
+        // Reference 2D macro-tile fixture generated from Cemu's GX2 layout.
+        // 48x48 visible texels, pitch 64 texels, padded to 48 rows.
+        // Swizzle 0x500 selects pipe 1 and bank 2; bank/pipe offsets vary
+        // between 32x16 macro-tile rows, not merely within a micro-tile.
+        constexpr uint32_t macroPitch = 64;
+        constexpr uint32_t macroSwizzle = 0x500;
+        constexpr uint16_t macroBases[3][2][4] = {
+            {{1280,1536,256,512}, {1024,1792,0,768}},
+            {{256,512,1280,1536}, {0,768,1024,1792}},
+            {{1792,1024,768,0}, {1536,1280,512,256}}
+        };
+        std::vector<uint8_t> macroTiled(macroPitch * size * 4, 0xA5);
+        for (uint32_t y = 0; y < size; ++y) {
+            for (uint32_t x = 0; x < size; ++x) {
+                const size_t macroTile = size_t(y / 16) * (macroPitch / 32) + (x / 32);
+                const size_t base = macroBases[y / 16][(y % 16) / 8][(x % 32) / 8];
+                const size_t micro = tiledAddress[(y % 8) * 8 + (x % 8)] * 4;
+                const size_t sourceAddress = macroTile * 2048 + base + micro;
+                if (sourceAddress + 4 > macroTiled.size())
+                    throw std::runtime_error("GX2 macro fixture allocation error");
+                std::memcpy(macroTiled.data() + sourceAddress,
+                            pixels.data() + (size_t(y) * size + x) * 4, 4);
+            }
+        }
+        std::vector<uint8_t> macroDecoded;
+        if (!gfxd3d12::detile_macro2d_thin1_rgba8(
+                macroTiled.data(), macroTiled.size(), size, size,
+                macroPitch, macroSwizzle, macroDecoded) ||
+            macroDecoded.size() != pixels.size() ||
+            std::memcmp(macroDecoded.data(), pixels.data(), pixels.size()) != 0)
+            throw std::runtime_error("GX2 2D macro thin1 texture roundtrip FAILED");
+        Log("GX2 macro 2D thin1 48x48 RGBA8 swizzle 0x500 roundtrip PASSED; uploading decoded macro texture");
         Check(allocator_->Reset(), L"Upload allocator Reset");
         Check(list_->Reset(allocator_.Get(), nullptr), L"Upload command list Reset");
         gfxd3d12::TextureUpload upload;
         Check(gfxd3d12::upload_linear_rgba8(
-                  device_.Get(), list_.Get(), untiled.data(), size, size, upload),
+                  device_.Get(), list_.Get(), macroDecoded.data(), size, size, upload),
               L"Upload RGBA8 checker");
         Check(list_->Close(), L"Upload command list Close");
         ID3D12CommandList* commands[] = {list_.Get()};
@@ -368,7 +401,7 @@ public:
         // First pump WinRT activation, THEN initialize D3D12 and LocalState logging.
         window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
         OpenLog();
-        Log("NSMBU Xbox GX2 Detile Probe v0.1.9 started");
+        Log("NSMBU Xbox GX2 Macro Detile Probe v0.2.0 started");
         if (!gfxd3d12::format_mapping_self_test()) {
             Log("GX2->DXGI format mapping self-test FAILED");
         } else {

@@ -1,4 +1,4 @@
-name: NSMBU Xbox - GX2 Detile Probe
+name: NSMBU Xbox - GX2 2D Macro Detile Probe
 
 on:
   push:
@@ -49,7 +49,7 @@ jobs:
         with:
           name: nsmbu-xbox-smoke
           path: |
-            xbox/smoke/output/NSMBUXboxSmoke_0.1.9.0_x64.appx
+            xbox/smoke/output/NSMBUXboxSmoke_0.2.0.0_x64.appx
             xbox/smoke/output/NSMBUXboxSmoke.cer
             xbox/smoke/output/Microsoft.VCLibs.x64.14.00.appx
           if-no-files-found: error

@@ -169,3 +169,34 @@ Expected `LocalState/nsmbu_xbox_diag.txt` log:
 and
 `GX2 detile 1D thin1 48x48 RGBA8 roundtrip PASSED`.
 The visible checkerboard should remain identical to v0.1.8.
+
+## Milestone 1.3 — GX2 2D macro-tiled texture decode (v0.2.0)
+
+`runtime/src/gfx/d3d12/gx2_macro_detile.{h,cpp}` decodes GX2 tile mode
+4 (`2D_TILED_THIN1`) for single-slice, uncompressed RGBA8 images.
+It implements Cemu's coordinate-address mapping for the Wii U's 2 GPU
+pipes, 4 memory banks, 256-byte pipe interleave, GX2 swizzle bits 8–10,
+and 32x16-pixel macro tiles.
+
+An explicit `gx2_swizzle` parameter is mandatory (there is no guessed
+default). Pitch must be a multiple of 32 texels and the source buffer
+must contain full padded 16-row macro-tile groups. All unsupported
+modes, missing surface padding, mipchains, non-RGBA8 formats, slices
+and AA samples remain out of scope.
+
+`runtime/test/gx2_macro_detile_test.cpp` tests independently fixed
+Cemu-derived byte-address vectors for swizzles `0`, `0x500`,
+and `0xD0500`, dimensions 53x37 with 64-texel pitch, plus truncated
+and invalid inputs. This is compiled with `-Wall -Wextra -Werror`
+on Ubuntu CI alongside the old 1D tests.
+
+Xbox 0.2.0 builds an independently encoded synthetic 48x48 RGBA8
+checkerboard (64-texel pitch, swizzle `0x500`), validates the decoded
+pixels byte-for-byte, and passes the result into the existing GPU
+upload/SRV/pixel-shader pipeline. The visible checkerboard and A-button
+background color change should stay the same as 0.1.9.
+
+Expected log:
+`GX2 macro 2D thin1 48x48 RGBA8 swizzle 0x500 roundtrip PASSED`.
+No Nintendo assets, keys, or extracted game files are committed.
+This does **not** yet integrate the renderer with `render::Backend`.
