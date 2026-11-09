@@ -1,5 +1,6 @@
 #include "rpx_inspect.h"
 #include <cstring>
+#include <cstdio>
 #include <utility>
 
 namespace xboxrpx {
@@ -43,9 +44,26 @@ bool inspect(const uint8_t* bytes, size_t count,
     if (std::memcmp(bytes, "\x7f" "ELF", 4) != 0 ||
         bytes[4] != 1 || bytes[5] != 2 || bytes[6] != 1)
         return fail(error, "not ELF32 big-endian v1");
-    if (u16(bytes + 16) != 2 || u16(bytes + 18) != 20 ||
-        u32(bytes + 20) != 1)
-        return fail(error, "ELF is not executable PowerPC v1");
+    const uint16_t elfType = u16(bytes + 16);
+    const uint16_t machine = u16(bytes + 18);
+    const uint32_t elfVersion = u32(bytes + 20);
+    // Standard synthetic ELF files use ET_EXEC=2. Retail Wii U RPX/RPL
+    // files are Cafe OS modified ELF32 objects and use 0xFE01 instead.
+    // Do not accept arbitrary processor-specific or shared-object types.
+    if (elfType != 2u && elfType != 0xFE01u) {
+        char message[100] = {};
+        std::snprintf(message, sizeof(message),
+                      "unsupported ELF e_type=0x%04X (expected 0x0002 or Cafe OS 0xFE01)",
+                      unsigned(elfType));
+        return fail(error, message);
+    }
+    if (machine != 20u || elfVersion != 1u) {
+        char message[120] = {};
+        std::snprintf(message, sizeof(message),
+                      "unsupported ELF e_machine=0x%04X e_version=0x%08X (expected PPC=0x0014, v1)",
+                      unsigned(machine), unsigned(elfVersion));
+        return fail(error, message);
+    }
     const uint32_t entry = u32(bytes + 24);
     const uint32_t shoff = u32(bytes + 32);
     const uint16_t shentsize = u16(bytes + 46);
@@ -75,6 +93,9 @@ bool inspect(const uint8_t* bytes, size_t count,
         return fail(error, "invalid section-name string table");
     const uint8_t* names = bytes + str.off;
     Image tmp;
+    tmp.elf_type = elfType;
+    tmp.machine = machine;
+    tmp.os_abi = bytes[7];
     tmp.entry = entry;
     bool entryIsText = false;
     for (const Raw& r : raw) {
