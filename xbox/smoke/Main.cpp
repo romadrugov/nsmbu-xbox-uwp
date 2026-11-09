@@ -6,6 +6,10 @@
 #include <wrl/client.h>
 #include <memory>
 #include <stdexcept>
+#include <string>
+#include <cstdio>
+#include <cstring>
+#include <exception>
 
 using Microsoft::WRL::ComPtr;
 using namespace Windows::ApplicationModel::Core;
@@ -13,13 +17,43 @@ using namespace Windows::UI::Core;
 
 namespace {
 constexpr UINT kBufferCount = 2;
+HANDLE gLogFile = INVALID_HANDLE_VALUE;
+
+void Log(const char* text) noexcept {
+    OutputDebugStringA(text);
+    OutputDebugStringA("\n");
+    if (gLogFile != INVALID_HANDLE_VALUE) {
+        DWORD written = 0;
+        WriteFile(gLogFile, text, static_cast<DWORD>(strlen(text)), &written, nullptr);
+        WriteFile(gLogFile, "\r\n", 2, &written, nullptr);
+        FlushFileBuffers(gLogFile);
+    }
+}
+
+void OpenLog() noexcept {
+    try {
+        auto localFolder = Windows::Storage::ApplicationData::Current->LocalFolder;
+        std::wstring path(localFolder->Path->Data());
+        path += L"\\nsmbu_xbox_diag.txt";
+        gLogFile = CreateFile2(path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ,
+                               CREATE_ALWAYS, nullptr);
+        if (gLogFile == INVALID_HANDLE_VALUE) {
+            OutputDebugStringA("NSMBU Xbox: could not open diagnostic file\n");
+        }
+    } catch (...) {
+        OutputDebugStringA("NSMBU Xbox: failed to locate LocalState\n");
+    }
+}
+
 
 void Check(HRESULT hr, const wchar_t* operation) {
+    char message[256] = {};
+    char name[160] = {};
+    WideCharToMultiByte(CP_UTF8, 0, operation, -1, name, sizeof(name), nullptr, nullptr);
+    sprintf_s(message, "%s: 0x%08lX", name, static_cast<unsigned long>(hr));
+    Log(message);
     if (FAILED(hr)) {
-        OutputDebugStringW(L"NSMBU Xbox smoke: ");
-        OutputDebugStringW(operation);
-        OutputDebugStringW(L" FAILED\n");
-        throw std::runtime_error("D3D12 smoke test failed; inspect debugger output");
+        throw std::runtime_error(message);
     }
 }
 
@@ -80,7 +114,7 @@ public:
         if (!fenceEvent_) {
             throw std::runtime_error("CreateEventExW failed");
         }
-        OutputDebugStringW(L"NSMBU Xbox smoke: D3D12 initialized\n");
+        Log("D3D12 initialized");
     }
 
     ~D3D12Smoke() {
@@ -124,6 +158,11 @@ public:
             WaitForSingleObjectEx(fenceEvent_, INFINITE, FALSE);
         }
         ++frame_;
+        if (frame_ == 1 || frame_ % 120 == 0) {
+            char message[100] = {};
+            sprintf_s(message, "Presented frame %llu", static_cast<unsigned long long>(frame_));
+            Log(message);
+        }
     }
 
 private:
@@ -150,13 +189,40 @@ public:
     }
     virtual void Load(Platform::String^) {}
     virtual void Run() {
-        window_->Activate();
-        graphics_ = std::make_unique<D3D12Smoke>(reinterpret_cast<IUnknown*>(window_));
-        while (!closed_) {
-            window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
-            graphics_->Draw();
+        OpenLog();
+        Log("NSMBU Xbox smoke diagnostic v0.1.1 started");
+        try {
+            window_->Activate();
+            Log("CoreWindow Activate completed");
+            graphics_ = std::make_unique<D3D12Smoke>(reinterpret_cast<IUnknown*>(window_));
+            Log("Graphics constructor completed");
+            while (!closed_) {
+                window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
+                graphics_->Draw();
+            }
+            Log("Window closed normally");
+        } catch (const std::exception& error) {
+            Log("Caught native C++ exception:");
+            Log(error.what());
+        } catch (Platform::Exception^ error) {
+            Log("Caught C++/CX exception");
+            char message[96] = {};
+            sprintf_s(message, "HResult=0x%08lX", static_cast<unsigned long>(error->HResult));
+            Log(message);
+        } catch (...) {
+            Log("Caught unknown exception");
         }
         graphics_.reset();
+        if (!closed_) {
+            Log("Holding app open after failure; retrieve LocalState/nsmbu_xbox_diag.txt");
+            while (!closed_) {
+                window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessOneAndAllPending);
+            }
+        }
+        if (gLogFile != INVALID_HANDLE_VALUE) {
+            CloseHandle(gLogFile);
+            gLogFile = INVALID_HANDLE_VALUE;
+        }
     }
     virtual void Uninitialize() {}
 
