@@ -225,3 +225,37 @@ Log checkpoints: 'render::Backend D3D12 probe attached' and
 'render::Backend dispatch first clear/draw/swap PASSED', plus increasing
 'Presented frame' counters. Frozen rollback: xbox-uwp-stable-0.2.0.
 Next: real GX2 color buffers, draw-state decoding and shader translation.
+
+
+## Milestone 2.1 — native PowerPC translator + 4 GiB virtual memory probe (v0.4.0)
+
+On Xbox v0.4.0 we test two foundations of the actual recompiled Wii U game:
+
+1. The original public `recomp/android_fixture.py` authors a synthetic ELF32/RPX
+   containing `li r3,40; addi r3,r3,2; blr`. GitHub Actions runs the genuine
+   recompiler to generate native C, then compiles this translated code with
+   **clang-cl** (preserving Clang-specific builtins and musttail compatibility).
+   The produced static library is linked into the existing UWP C++/CX executable.
+   On Xbox the app invokes the generated function and logs whether r3 == 42.
+   This is an authentic execution of generated code from a PUBLIC fixture,
+   **not Nintendo/Mario code**. Actual game recompilation is not yet linked.
+
+2. The memory probe calls `VirtualAllocFromApp` to RESERVE 4 GiB of virtual
+   address space, first at the real runtime `PPC_MEM_BASE` (0x200000000000),
+   with MEM_WRITE_WATCH when possible. If fixed reservation fails it records
+   Win32 error codes and also tests an OS-chosen location. It commits only
+   one 64 KiB segment, writes and reads two bytes, then releases the region.
+   It does NOT commit four gigabytes or prove the game fits Xbox RAM.
+
+Expect log checkpoints:
+`PPC memory 4GiB virtual reservation PASSED: FIXED` or a detailed failure;
+`PPC memory 64KiB guest slice read/write PASSED` if reservation works;
+`PPC fixture generated code RESULT: 42 (PASSED)` if the translated CPU works.
+
+The previous D3D12/texture/render::Backend probe still runs after these checks.
+Stable rollback branch: `xbox-uwp-stable-0.3.0`.
+
+**Next:** when native Clang code and VM reservation are confirmed on Xbox,
+investigate real game-generated code size, import/dispatch wiring, and
+lazy-commit guest memory. Only then integrate a user-provided local dump.
+No Nintendo assets, original RPX or decryption keys enter GitHub CI.
