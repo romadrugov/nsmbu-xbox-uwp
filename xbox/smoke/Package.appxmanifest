@@ -4,10 +4,10 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
   IgnorableNamespaces="uap mp">
-  <Identity Name="Romadrugov.NSMBUXboxSmoke" Publisher="CN=NSMBUXbox" Version="0.6.0.0" ProcessorArchitecture="x64" />
+  <Identity Name="Romadrugov.NSMBUXboxSmoke" Publisher="CN=NSMBUXbox" Version="0.6.1.0" ProcessorArchitecture="x64" />
   <mp:PhoneIdentity PhoneProductId="5ca726b3-c8ae-40d2-909a-8d14e266d4b4" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
-    <DisplayName>NSMBU Xbox RPX Inspection Probe</DisplayName>
+    <DisplayName>NSMBU Xbox Cafe RPX Inspection Probe</DisplayName>
     <PublisherDisplayName>NSMBU Xbox Project</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -19,7 +19,7 @@
   <Applications>
     <Application Id="App" Executable="NSMBUXboxSmoke.exe" EntryPoint="NSMBUXboxSmoke.App">
       <uap:VisualElements
-        DisplayName="NSMBU RPX Inspection Probe"
+        DisplayName="NSMBU Cafe RPX Inspection Probe"
         Description="Native UWP Direct3D 12 graphics verification, no game files"
         BackgroundColor="#183347"
         Square150x150Logo="Assets\Square150x150Logo.png"
