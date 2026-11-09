@@ -25,6 +25,8 @@ struct Image {
     size_t mapped_count = 0;
     size_t compressed_count = 0;
     uint64_t mapped_bytes = 0;
+    bool section_names_compressed = false;
+    size_t section_names_decoded_bytes = 0;
 };
 bool inspect(const uint8_t* bytes, size_t byte_count,
              Image& output, std::string& error);
