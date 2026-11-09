@@ -3,6 +3,10 @@
 // This file must be compiled by clang-cl, not MSVC; the recomp uses Clang
 // builtins and may require the musttail attribute for real functions.
 #include "funcs.h"
+#include "recomp_table.h"
+#include "core/headless_dispatch.h"
+#include "ppc_fixture_bridge.h"
+#include <string.h>
 #include <stdlib.h>
 
 int g_ppc_trace = 0;
@@ -22,4 +26,48 @@ int nsmbu_fixture_return_42(void) {
     cpu.core = 0;
     f_02000000(&cpu);
     return (int)cpu.r[3];
+}
+
+
+// Synthetic HLE callback. This is not a Nintendo/Wii U OS import.
+static void fixture_host_add_eight(Cpu* cpu) {
+    cpu->r[3] += 8u;
+}
+
+// Uses the actual recomp-generated table.c and its function addresses.
+// Contrasts with v0.4.0, which invoked f_02000000 directly.
+int nsmbu_headless_public_boot(HeadlessBootReport* report) {
+    if (!report) return -1;
+    memset(report, 0, sizeof(*report));
+    report->entry_address = g_recomp_entry_point;
+    report->recompiled_function_count = g_recomp_func_count;
+    report->recompiled_import_count = g_recomp_import_count;
+
+    if (!g_recomp_func_count || !headless_dispatch_init()) return -2;
+    if (!headless_dispatch_lookup(g_recomp_entry_point)) {
+        headless_dispatch_reset();
+        return -3;
+    }
+
+    Cpu cpu = {0};
+    cpu.core = 0;
+    cpu.pc = g_recomp_entry_point;
+    ppc_dispatch(&cpu); // generated table -> recompiled native x64 function
+    report->guest_result = cpu.r[3];
+
+    report->unknown_address_rejected =
+        headless_dispatch_lookup(0xDEADC0DEu) == 0 ? 1u : 0u;
+
+    const uint32_t hostAddress =
+        headless_dispatch_register_host(fixture_host_add_eight);
+    report->host_address = hostAddress;
+    if (hostAddress) {
+        cpu.pc = hostAddress;
+        ppc_dispatch(&cpu); // registered host callback through same lookup
+        report->host_result = cpu.r[3];
+    }
+    headless_dispatch_reset();
+    return report->guest_result == 42u &&
+           report->host_result == 50u &&
+           report->unknown_address_rejected == 1u ? 0 : -4;
 }
