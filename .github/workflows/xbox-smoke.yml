@@ -7,6 +7,8 @@ on:
       - "xbox/**"
       - "runtime/src/gfx/d3d12/gx2_detile.*"
       - "runtime/test/gx2_detile_test.cpp"
+      - "runtime/src/gfx/d3d12/gx2_macro_detile.*"
+      - "runtime/test/gx2_macro_detile_test.cpp"
       - ".github/workflows/xbox-smoke.yml"
   workflow_dispatch:
 
@@ -28,6 +30,12 @@ jobs:
             runtime/test/gx2_detile_test.cpp \
             -o /tmp/gx2_detile_test
           /tmp/gx2_detile_test
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -I runtime/src \
+            runtime/src/gfx/d3d12/gx2_macro_detile.cpp \
+            runtime/test/gx2_macro_detile_test.cpp \
+            -o /tmp/gx2_macro_detile_test
+          /tmp/gx2_macro_detile_test
   smoke:
     runs-on: windows-2022
     timeout-minutes: 35
