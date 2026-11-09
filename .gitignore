@@ -47,3 +47,11 @@ headstart.bin
 # iOS build output
 runtime/ios/build/
 runtime/ios/build-sim/
+
+# Xbox smoke local/generated files
+/xbox/smoke/Assets/
+/xbox/smoke/output/
+/xbox/smoke/x64/
+/xbox/smoke/*.VC.db
+/xbox/smoke/*.VC.opendb
+/xbox/smoke/*.user
