@@ -71,26 +71,26 @@ Copy-Item $exe.FullName (Join-Path $stage 'NSMBUXboxSmoke.exe')
 Copy-Item (Join-Path $PSScriptRoot 'Package.appxmanifest') (Join-Path $stage 'AppxManifest.xml')
 Copy-Item (Join-Path $PSScriptRoot 'Assets') (Join-Path $stage 'Assets') -Recurse
 
-# C++/CX needs the OneCore CRT, not the Win32 desktop runtime.
-$redistRoot = Join-Path $vs 'VC/Redist/MSVC'
-$crtNames = @(
-    'msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll',
-    'msvcp140_atomic_wait.dll', 'vccorlib140.dll',
-    'vcruntime140.dll', 'vcruntime140_1.dll'
+# MSVC UWP images import VCRUNTIME140_APP / VCRUNTIME140_1_APP /
+# VCCORLIB140_APP. These live in the Microsoft.VCLibs framework package.
+# Do NOT stage desktop CRT DLLs (without _APP suffix): they are not substitutes.
+$metadata = @('NSMBUXboxSmoke.winmd', 'resources.pri')
+foreach ($name in $metadata) {
+    $src = Join-Path $exe.DirectoryName $name
+    if (-not (Test-Path $src)) { throw "Missing UWP activation metadata $src" }
+    Copy-Item $src (Join-Path $stage $name)
+    Write-Host "Bundled WinRT metadata: $name"
+}
+
+$vclibsRelative = 'Microsoft SDKs/Windows Kits/10/ExtensionSDKs/Microsoft.VCLibs/14.0/Appx/Retail/x64/Microsoft.VCLibs.x64.14.00.appx'
+$vclibsCandidates = @(
+    (Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) $vclibsRelative),
+    (Join-Path ([Environment]::GetFolderPath('ProgramFiles')) $vclibsRelative)
 )
-$crtFolder = $null
-if (Test-Path $redistRoot) {
-    foreach ($candidate in (Get-ChildItem $redistRoot -Directory | Sort-Object Name -Descending)) {
-        $possible = Join-Path $candidate.FullName 'onecore/x64/Microsoft.VC143.CRT'
-        $missing = @($crtNames | Where-Object { -not (Test-Path (Join-Path $possible $_)) })
-        if ($missing.Count -eq 0) { $crtFolder = $possible; break }
-    }
-}
-if (-not $crtFolder) { throw 'Complete OneCore CRT redistributable not found' }
-foreach ($name in $crtNames) {
-    Copy-Item (Join-Path $crtFolder $name) (Join-Path $stage $name)
-}
-Write-Host "OneCore CRT: $crtFolder"
+$vclibs = $vclibsCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $vclibs) { throw "Missing UWP VCLibs framework appx. Install C++ Universal Windows Platform Tools; searched $($vclibsCandidates -join ', ')" }
+Copy-Item $vclibs (Join-Path $out 'Microsoft.VCLibs.x64.14.00.appx')
+Write-Host "UWP framework dependency: $vclibs"
 
 $tools = Join-Path $sdkRoot "bin/$sdk/x64"
 $makeappx = Join-Path $tools 'makeappx.exe'
@@ -99,7 +99,7 @@ if (-not (Test-Path $makeappx) -or -not (Test-Path $signtool)) {
     throw 'Windows SDK app packaging tools missing'
 }
 
-$appx = Join-Path $out 'NSMBUXboxSmoke_0.1.3.0_x64.appx'
+$appx = Join-Path $out 'NSMBUXboxSmoke_0.1.4.0_x64.appx'
 $cer = Join-Path $out 'NSMBUXboxSmoke.cer'
 $pfx = Join-Path $env:RUNNER_TEMP 'nsmbu-smoke-private.pfx'
 $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=NSMBUXbox' -CertStoreLocation 'Cert:\CurrentUser\My' -KeyAlgorithm RSA -KeyLength 2048 -KeyExportPolicy Exportable -HashAlgorithm SHA256 -NotAfter (Get-Date).AddYears(1)
@@ -116,7 +116,7 @@ if ($LASTEXITCODE -ne 0) { throw 'signtool sign failed' }
 $unpack = Join-Path $env:RUNNER_TEMP 'nsmbu-smoke-unpacked'
 & $makeappx unpack /p $appx /d $unpack /o
 if ($LASTEXITCODE -ne 0) { throw 'makeappx validation failed' }
-foreach ($file in @('NSMBUXboxSmoke.exe', 'AppxManifest.xml', 'Assets/Square150x150Logo.png')) {
+foreach ($file in @('NSMBUXboxSmoke.exe', 'AppxManifest.xml', 'NSMBUXboxSmoke.winmd', 'resources.pri', 'Assets/Square150x150Logo.png')) {
     if (-not (Test-Path (Join-Path $unpack $file))) { throw "Appx missing $file" }
 }
 Write-Host "APPX: $appx"
