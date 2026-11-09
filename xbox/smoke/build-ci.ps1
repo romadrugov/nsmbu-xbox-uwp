@@ -36,6 +36,18 @@ $exe = Get-ChildItem $PSScriptRoot -Filter 'NSMBUXboxSmoke.exe' -File -Recurse |
 if (-not $exe) { throw 'UWP executable missing after build' }
 Write-Host "Compiled: $($exe.FullName) ($($exe.Length) bytes)"
 
+# A graphical Xbox UWP app must not be linked as a Windows console executable.
+# IMAGE_OPTIONAL_HEADER64.Subsystem is 68 bytes from the PE optional header.
+$peBytes = [IO.File]::ReadAllBytes($exe.FullName)
+$peOffset = [BitConverter]::ToInt32($peBytes, 0x3c)
+if ($peBytes[$peOffset] -ne 80 -or $peBytes[$peOffset + 1] -ne 69) {
+    throw 'Invalid PE signature'
+}
+$subsystem = [BitConverter]::ToUInt16($peBytes, $peOffset + 24 + 68)
+Write-Host "PE subsystem: $subsystem (2 = GUI; 3 = console)"
+if ($subsystem -ne 2) { throw 'Unexpected console subsystem in Xbox graphical application' }
+
+
 $stage = Join-Path $env:RUNNER_TEMP 'nsmbu-smoke-stage'
 $out = Join-Path $PSScriptRoot 'output'
 New-Item -ItemType Directory -Path $stage,$out -Force | Out-Null
