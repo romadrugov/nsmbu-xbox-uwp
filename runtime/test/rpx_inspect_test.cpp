@@ -62,6 +62,55 @@ int main(int argc, char** argv) {
     unsupported[23] = 2; // bad header version
     if (!rejected(unsupported)) return 1;
 
+    // Cafe OS can compress the .shstrtab itself. The section header
+    // then describes four big-endian decoded-length bytes + a zlib stream.
+    // These are PUBLIC hand-authored names from android_fixture.py.
+    const uint8_t packedNames[] = {
+        0x00, 0x00, 0x00, 0x11, 0x78, 0xda, 0x63, 0xd0,
+        0x2b, 0x49, 0xad, 0x28, 0x61, 0xd0, 0x2b, 0xce,
+        0x28, 0x2e, 0x29, 0x2a, 0x49, 0x4c, 0x62, 0x00,
+        0x00, 0x2f, 0xb0, 0x05, 0x8d
+    };
+    auto writeBe32 = [](std::vector<uint8_t>& destination, size_t offset, uint32_t value) {
+        destination[offset] = uint8_t(value >> 24);
+        destination[offset + 1] = uint8_t(value >> 16);
+        destination[offset + 2] = uint8_t(value >> 8);
+        destination[offset + 3] = uint8_t(value);
+    };
+    std::vector<uint8_t> cafeCompressed = cafe;
+    // The synthetic ELF has section header table at offset 52 and
+    // .shstrtab as the third entry: 52 + 2*40 = 132.
+    constexpr size_t kShstrHeader = 132;
+    constexpr size_t kPackedOffset = 52 + 3*40 + 12 + 17;
+    if (cafeCompressed.size() != kPackedOffset) return 1;
+    writeBe32(cafeCompressed, kShstrHeader + 8, 0x08000000u); // SHF_RPL_ZLIB
+    writeBe32(cafeCompressed, kShstrHeader + 16, uint32_t(kPackedOffset));
+    writeBe32(cafeCompressed, kShstrHeader + 20, sizeof(packedNames));
+    cafeCompressed.insert(cafeCompressed.end(), packedNames,
+                          packedNames + sizeof(packedNames));
+    xboxrpx::Image compressedImage;
+    if (!xboxrpx::inspect(cafeCompressed.data(), cafeCompressed.size(), compressedImage, reason) ||
+        !compressedImage.section_names_compressed ||
+        compressedImage.section_names_decoded_bytes != 17 ||
+        compressedImage.compressed_count != 1 ||
+        !xboxrpx::section_named(compressedImage, ".text") ||
+        !xboxrpx::section_named(compressedImage, ".shstrtab")) {
+        std::fprintf(stderr, "Compressed Cafe OS section names rejected: %s\n", reason.c_str());
+        return 1;
+    }
+    auto invalidCompressed = cafeCompressed;
+    invalidCompressed[kPackedOffset + 4] = 0; // corrupt zlib CMF
+    if (!rejected(invalidCompressed)) return 1;
+    invalidCompressed = cafeCompressed;
+    invalidCompressed.back() ^= 1u; // Adler-32 checksum mismatch
+    if (!rejected(invalidCompressed)) return 1;
+    invalidCompressed = cafeCompressed;
+    writeBe32(invalidCompressed, kPackedOffset, 0x01000000u);
+    if (!rejected(invalidCompressed)) return 1; // 16 MiB decompression bomb
+    invalidCompressed = cafeCompressed;
+    writeBe32(invalidCompressed, kShstrHeader + 20, 7u);
+    if (!rejected(invalidCompressed)) return 1; // truncated zlib stream
+
     const auto savedEntry = image.entry;
     auto failsWithoutMutation = [&](const std::vector<uint8_t>& broken) {
         if (!rejected(broken)) return false;
