@@ -15,7 +15,7 @@ using Microsoft::WRL::ComPtr;
 using namespace Windows::ApplicationModel::Core;
 using namespace Windows::UI::Core;
 
-namespace {
+namespace NSMBUXboxSmoke {
 constexpr UINT kBufferCount = 2;
 HANDLE gLogFile = INVALID_HANDLE_VALUE;
 
@@ -179,13 +179,13 @@ private:
     UINT64 frame_ = 0;
 };
 
-ref class SmokeView sealed : IFrameworkView {
+public ref class App sealed : IFrameworkView {
 public:
     virtual void Initialize(CoreApplicationView^) {}
     virtual void SetWindow(CoreWindow^ window) {
         window_ = window;
         window_->Closed += ref new Windows::Foundation::TypedEventHandler<
-            CoreWindow^, CoreWindowEventArgs^>(this, &SmokeView::OnClosed);
+            CoreWindow^, CoreWindowEventArgs^>(this, &App::OnClosed);
     }
     virtual void Load(Platform::String^) {}
     virtual void Run() {
@@ -235,12 +235,12 @@ private:
 
 ref class SmokeViewSource sealed : IFrameworkViewSource {
 public:
-    virtual IFrameworkView^ CreateView() { return ref new SmokeView(); }
+    virtual IFrameworkView^ CreateView() { return ref new App(); }
 };
 }  // namespace
 
 [Platform::MTAThread]
 int main(Platform::Array<Platform::String^>^) {
-    CoreApplication::Run(ref new SmokeViewSource());
+    CoreApplication::Run(ref new NSMBUXboxSmoke::SmokeViewSource());
     return 0;
 }
