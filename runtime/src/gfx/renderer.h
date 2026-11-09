@@ -6,7 +6,7 @@
 
 namespace render {
 
-enum class Api : int { Metal = 0, Vulkan = 1 };
+enum class Api : int { Metal = 0, Vulkan = 1, D3D12 = 2 };
 const char* api_name(Api a);
 const char* api_key(Api a);
 bool compiled(Api a);
