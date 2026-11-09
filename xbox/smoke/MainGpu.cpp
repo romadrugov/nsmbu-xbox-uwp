@@ -17,6 +17,7 @@
 #include "gfx/d3d12/backend_probe.h"
 #include "core/xbox_guest_vm.h"
 #include "ppc_fixture_bridge.h"
+#include "RpxProbe.h"
 
 // renderer.cpp is not linked into the UWP smoke test; production builds
 // provide this symbol themselves. Do not define it in backend_probe.cpp.
@@ -493,7 +494,7 @@ public:
         // First pump WinRT activation, THEN initialize D3D12 and LocalState logging.
         window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
         OpenLog();
-        Log("NSMBU Xbox Headless Runtime Bootstrap v0.5.0 started");
+        Log("NSMBU Xbox RPX Inspection Probe v0.6.0 started");
         Log("[boot/0.5] Phase 1: reserve fixed Wii U guest virtual address space");
         xboxguest::GuestVm guestVm;
         if (!guestVm.open()) {
@@ -544,6 +545,9 @@ public:
             ? "[boot/0.5] guest-address dispatch + synthetic HLE callback PASSED (42 -> 50)"
             : "[boot/0.5] guest-address dispatch / synthetic HLE callback FAILED");
         Log("[boot/0.5] Phase 3: preserve verified D3D12 graphics path");
+        Log("[rpx/0.6] Phase 0: begin bounded local RPX/ELF inspection");
+        xboxrpxprobe::run(guestVm, Log);
+        Log("[rpx/0.6] Phase 3: continue graphics; no LOCAL game code executed");
         if (!gfxd3d12::format_mapping_self_test()) {
             Log("GX2->DXGI format mapping self-test FAILED");
         } else {
