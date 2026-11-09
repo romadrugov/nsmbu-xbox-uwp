@@ -63,6 +63,7 @@ bool parse(const char* s, Api& out) {
     if (!s) return false;
     if (!strcasecmp(s, "metal")) { out = Api::Metal; return true; }
     if (!strcasecmp(s, "vulkan") || !strcasecmp(s, "vk") || !strcasecmp(s, "moltenvk")) { out = Api::Vulkan; return true; }
+    if (!strcasecmp(s, "d3d12") || !strcasecmp(s, "dx12")) { out = Api::D3D12; return true; }
     return false;
 }
 
@@ -85,8 +86,22 @@ Api default_api() {
 }
 }
 
-const char* api_name(Api a) { return a == Api::Vulkan ? "Vulkan" : "Metal"; }
-const char* api_key(Api a) { return a == Api::Vulkan ? "vulkan" : "metal"; }
+const char* api_name(Api a) {
+    switch (a) {
+    case Api::Metal: return "Metal";
+    case Api::Vulkan: return "Vulkan";
+    case Api::D3D12: return "Direct3D 12";
+    }
+    return "Unknown";
+}
+const char* api_key(Api a) {
+    switch (a) {
+    case Api::Metal: return "metal";
+    case Api::Vulkan: return "vulkan";
+    case Api::D3D12: return "d3d12";
+    }
+    return "unknown";
+}
 bool compiled(Api a) { return backend_for(a) != nullptr; }
 bool can_choose() { return compiled(Api::Metal) && compiled(Api::Vulkan); }
 Api active() { return g_backend ? g_backend->api : g_requested; }
@@ -127,7 +142,7 @@ void choose(int argc, char** argv) {
         else if (!strcmp(argv[i], "--renderer") && i + 1 < argc) v = argv[i + 1];
         if (v) {
             if (parse(v, a)) why = "command line";
-            else LOG("[gfx] unknown renderer '%s' (metal or vulkan)", v);
+            else LOG("[gfx] unknown renderer '%s' (metal, vulkan or d3d12)", v);
         }
     }
     if (!compiled(a)) {
