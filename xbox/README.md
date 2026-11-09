@@ -71,3 +71,28 @@ frame to `LocalState/nsmbu_xbox_diag.txt`.
 If the file is **missing**, the app likely fails before `Run()` can initialize
 LocalState, so check the Device Portal's crash/error diagnostics instead.
 Don't confuse the splash screen with a successfully presented D3D12 frame.
+
+
+## Milestone 0.5 — D3D12 GPU probe v0.1.5
+
+v0.1.4 is **verified on Xbox Series S**: it stays open on a blank black screen,
+confirming our AppX, WinRT activation, `resources.pri`, `.winmd`, GUI subsystem,
+and the `Microsoft.VCLibs.140.00` framework dependency are correct.
+
+The v0.1.5 probe switches to `MainGpu.cpp` while retaining the working
+`OnActivated`/`IFrameworkView` lifecycle. It creates a D3D12 device,
+CoreWindow swap chain, RTV heap and GPU fence, then alternates teal
+clear colors at 60-frame intervals. It is a platform test, **not NSMBU**.
+
+Deploy `NSMBUXboxSmoke_0.1.5.0_x64.appx` (and the VCLibs dependency if it is
+not already installed) from the Xbox D3D12 GPU Probe workflow. Certificate
+changes each CI run: uninstall the prior smoke package if an upgrade fails.
+
+- **Success:** teal/blue background stays visible and changes tone.
+- **Failure, app remains black:** check Xbox Device Portal → File Explorer →
+  LocalAppData → `Romadrugov.NSMBUXboxSmoke` → LocalState →
+  `nsmbu_xbox_diag.txt`. Look for the last `GPU stage` or HRESULT.
+- **Immediate exit:** launch or dependency regression; compare with v0.1.4.
+
+This retains the known-good lifecycle-only source in `MainLifecycle.cpp`,
+so a subsequent experiment can switch back without losing the baseline.

@@ -4,10 +4,10 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
   IgnorableNamespaces="uap mp">
-  <Identity Name="Romadrugov.NSMBUXboxSmoke" Publisher="CN=NSMBUXbox" Version="0.1.4.0" ProcessorArchitecture="x64" />
+  <Identity Name="Romadrugov.NSMBUXboxSmoke" Publisher="CN=NSMBUXbox" Version="0.1.5.0" ProcessorArchitecture="x64" />
   <mp:PhoneIdentity PhoneProductId="5ca726b3-c8ae-40d2-909a-8d14e266d4b4" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
-    <DisplayName>NSMBU UWP Lifecycle Probe</DisplayName>
+    <DisplayName>NSMBU Xbox GPU Probe</DisplayName>
     <PublisherDisplayName>NSMBU Xbox Project</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -19,8 +19,8 @@
   <Applications>
     <Application Id="App" Executable="NSMBUXboxSmoke.exe" EntryPoint="NSMBUXboxSmoke.App">
       <uap:VisualElements
-        DisplayName="NSMBU Lifecycle Probe"
-        Description="UWP startup/lifecycle isolation without any GPU code"
+        DisplayName="NSMBU GPU Probe"
+        Description="Native UWP Direct3D 12 graphics verification, no game files"
         BackgroundColor="#183347"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
