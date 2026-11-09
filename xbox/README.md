@@ -141,3 +141,31 @@ the Xbox controller A button continues to change the background color.
 **Expected Xbox result:** a large square cyan/cream checkerboard over the pulsing teal background.
 The log should include `RGBA8 checker texture upload COMPLETE: 48x48, source row=192, GPU row=256`.
 This is not GX2 untile/swizzle support, mipmapping, resource caching or full shader translation yet.
+
+## Milestone 1.2 — CPU-side GX2 1D thin tiled decoding (v0.1.9)
+
+`runtime/src/gfx/d3d12/gx2_detile.{h,cpp}` adds a bounded, pure-C++
+single-mip RGBA8 surface decoder for exactly two GX2 tile modes:
+
+- `GX2_TILE_MODE_LINEAR_ALIGNED` = 1: uses explicit surface pitch
+- `GX2_TILE_MODE_TILED_1D_THIN1` = 2: 8x8 microtiles and the 32-bit
+  color microtile bit sequence documented in vendored Cemu
+  `LatteAddrLib_Coord.cpp`.
+
+This does **not** decode mode 0 (DEFAULT), macro-tiled modes 4–15,
+compressed formats, cube/3D textures, multisample surfaces, or mips.
+Unsupported modes are rejected, without attempting to guess.
+
+`runtime/test/gx2_detile_test.cpp` runs in independent Ubuntu CI,
+with golden 8x8 microtile indices, irregular 13x9 texture dimensions,
+padded pitch, and invalid/truncated input checks. On Xbox v0.1.9
+reconstructs the 48x48 checker through synthetic GX2 1D tiled data,
+compares it byte-for-byte against the original, then uploads the decoded
+texture to D3D12. This preserves the previously verified SRV and GPU
+rendering pipeline.
+
+Expected `LocalState/nsmbu_xbox_diag.txt` log:
+`GX2 detile CPU self-test PASSED (linear aligned, 1D thin1, 13x9, bounds)`
+and
+`GX2 detile 1D thin1 48x48 RGBA8 roundtrip PASSED`.
+The visible checkerboard should remain identical to v0.1.8.

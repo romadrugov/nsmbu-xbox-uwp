@@ -1,10 +1,12 @@
-name: NSMBU Xbox - RGBA8 Texture Upload Probe
+name: NSMBU Xbox - GX2 Detile Probe
 
 on:
   push:
     branches: [xbox-uwp]
     paths:
       - "xbox/**"
+      - "runtime/src/gfx/d3d12/gx2_detile.*"
+      - "runtime/test/gx2_detile_test.cpp"
       - ".github/workflows/xbox-smoke.yml"
   workflow_dispatch:
 
@@ -12,6 +14,20 @@ permissions:
   contents: read
 
 jobs:
+  detile-cpu-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile pure C++ GX2 detile unit tests
+        shell: bash
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -I runtime/src \
+            runtime/src/gfx/d3d12/gx2_detile.cpp \
+            runtime/test/gx2_detile_test.cpp \
+            -o /tmp/gx2_detile_test
+          /tmp/gx2_detile_test
   smoke:
     runs-on: windows-2022
     timeout-minutes: 35
@@ -25,7 +41,7 @@ jobs:
         with:
           name: nsmbu-xbox-smoke
           path: |
-            xbox/smoke/output/NSMBUXboxSmoke_0.1.8.0_x64.appx
+            xbox/smoke/output/NSMBUXboxSmoke_0.1.9.0_x64.appx
             xbox/smoke/output/NSMBUXboxSmoke.cer
             xbox/smoke/output/Microsoft.VCLibs.x64.14.00.appx
           if-no-files-found: error

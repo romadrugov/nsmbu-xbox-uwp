@@ -12,6 +12,7 @@
 #include <exception>
 #include "gfx/d3d12/format_map.h"
 #include "gfx/d3d12/texture_upload.h"
+#include "gfx/d3d12/gx2_detile.h"
 #include <array>
 #include <climits>
 #include "GpuShadersVS.h"
@@ -206,11 +207,40 @@ private:
                 pixels[p + 3] = 255;
             }
         }
+        // Input is packed into GX2 1D thin micro-tiles with an independently
+        // specified 32bpp tile lookup. The decoder must restore normal rows.
+        constexpr std::array<uint8_t, 64> tiledAddress = {
+             0, 1, 2, 3, 8, 9,10,11,
+             4, 5, 6, 7,12,13,14,15,
+            16,17,18,19,24,25,26,27,
+            20,21,22,23,28,29,30,31,
+            32,33,34,35,40,41,42,43,
+            36,37,38,39,44,45,46,47,
+            48,49,50,51,56,57,58,59,
+            52,53,54,55,60,61,62,63
+        };
+        std::array<uint8_t, size * size * 4> gx2Tiled = {};
+        for (uint32_t y = 0; y < size; ++y) {
+            for (uint32_t x = 0; x < size; ++x) {
+                const size_t tile = (y / 8) * (size / 8) + x / 8;
+                const size_t index = tiledAddress[(y % 8) * 8 + x % 8];
+                std::memcpy(gx2Tiled.data() + (tile * 64 + index) * 4,
+                            pixels.data() + (static_cast<size_t>(y) * size + x) * 4, 4);
+            }
+        }
+        std::vector<uint8_t> untiled;
+        if (!gfxd3d12::detile_rgba8(
+                gx2Tiled.data(), gx2Tiled.size(), size, size, size,
+                gfxd3d12::kGx2Tiled1DThin1, untiled) ||
+            untiled.size() != pixels.size() ||
+            std::memcmp(untiled.data(), pixels.data(), pixels.size()) != 0)
+            throw std::runtime_error("GX2 1D thin1 texture roundtrip FAILED");
+        Log("GX2 detile 1D thin1 48x48 RGBA8 roundtrip PASSED; uploading decoded pixels");
         Check(allocator_->Reset(), L"Upload allocator Reset");
         Check(list_->Reset(allocator_.Get(), nullptr), L"Upload command list Reset");
         gfxd3d12::TextureUpload upload;
         Check(gfxd3d12::upload_linear_rgba8(
-                  device_.Get(), list_.Get(), pixels.data(), size, size, upload),
+                  device_.Get(), list_.Get(), untiled.data(), size, size, upload),
               L"Upload RGBA8 checker");
         Check(list_->Close(), L"Upload command list Close");
         ID3D12CommandList* commands[] = {list_.Get()};
@@ -338,13 +368,18 @@ public:
         // First pump WinRT activation, THEN initialize D3D12 and LocalState logging.
         window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
         OpenLog();
-        Log("NSMBU Xbox RGBA8 Texture Probe v0.1.8 started");
+        Log("NSMBU Xbox GX2 Detile Probe v0.1.9 started");
         if (!gfxd3d12::format_mapping_self_test()) {
             Log("GX2->DXGI format mapping self-test FAILED");
         } else {
             Log("GX2->DXGI format mapping self-test PASSED (RGBA8, sRGB, BC1, BC5, D16, unsupported)");
         }
         try {
+            if (!gfxd3d12::detile_rgba8_self_test()) {
+                Log("GX2 detile CPU self-test FAILED");
+                throw std::runtime_error("GX2 detile self-test failure");
+            }
+            Log("GX2 detile CPU self-test PASSED (linear aligned, 1D thin1, 13x9, bounds)");
             Log("Starting D3D12 backend");
             D3D12Smoke graphics(reinterpret_cast<IUnknown*>(window_));
             Log("D3D12 backend ready; rendering textured quad and polling Xbox Gamepad");
