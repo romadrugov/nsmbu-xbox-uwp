@@ -19,6 +19,10 @@ void log_image(const xboxrpx::Image& image, void (*log)(const char*), const char
         image.entry, image.sections.size(), image.mapped_count,
         static_cast<unsigned long long>(image.mapped_bytes), image.compressed_count);
     log(line);
+    sprintf_s(line, "[rpx/0.6] %s section-name table: %s, decoded-bytes=%zu",
+              which, image.section_names_compressed ? "zlib-compressed" : "uncompressed",
+              image.section_names_decoded_bytes);
+    log(line);
     if (const auto* text = xboxrpx::section_named(image, ".text")) {
         sprintf_s(line, "[rpx/0.6] %s .text: address=%08X file-bytes=%u decoded-bytes=%u compressed=%s",
             which, text->address, text->file_bytes, text->memory_bytes,
