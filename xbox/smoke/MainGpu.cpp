@@ -15,6 +15,8 @@
 #include "gfx/d3d12/gx2_detile.h"
 #include "gfx/d3d12/gx2_macro_detile.h"
 #include "gfx/d3d12/backend_probe.h"
+#include "core/xbox_guest_vm.h"
+#include "ppc_fixture_bridge.h"
 
 // renderer.cpp is not linked into the UWP smoke test; production builds
 // provide this symbol themselves. Do not define it in backend_probe.cpp.
@@ -491,9 +493,57 @@ public:
         // First pump WinRT activation, THEN initialize D3D12 and LocalState logging.
         window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
         OpenLog();
-        Log("NSMBU Xbox PPC CPU / Memory Probe v0.4.0 started");
-        RunPpcMemoryProbe();
-        RunTranslatedPpcFixtureProbe();
+        Log("NSMBU Xbox Headless Runtime Bootstrap v0.5.0 started");
+        Log("[boot/0.5] Phase 1: reserve fixed Wii U guest virtual address space");
+        xboxguest::GuestVm guestVm;
+        if (!guestVm.open()) {
+            char line[150] = {};
+            sprintf_s(line, "[boot/0.5] guest VM FIXED 4GiB reserve FAILED: Win32=%lu",
+                      static_cast<unsigned long>(guestVm.last_error()));
+            Log(line);
+        } else {
+            Log(guestVm.write_watch()
+                ? "[boot/0.5] guest VM FIXED 4GiB reserve PASSED (write-watch enabled)"
+                : "[boot/0.5] guest VM FIXED 4GiB reserve PASSED (no write-watch)");
+            // Explicit sparse commits only, NOT 4 GiB of physical memory.
+            // Separate guest regions exercise the future RPX loader pathway.
+            const bool mem2 = guestVm.commit(0x10000000u, 4096);
+            const bool foreground = guestVm.commit(0xE0000000u, 4096);
+            if (mem2 && foreground) {
+                unsigned char* first = guestVm.ptr(0x10000000u);
+                unsigned char* second = guestVm.ptr(0xE0000000u);
+                first[0] = 0x12; first[1] = 0x34;
+                first[2] = 0x56; first[3] = 0x78;
+                second[0] = 0xA5; second[1] = 0x5A;
+                if (first[0] == 0x12 && first[3] == 0x78 &&
+                    second[0] == 0xA5 && second[1] == 0x5A)
+                    Log("[boot/0.5] guest VM two sparse 64KiB commits PASSED (MEM2/foreground)");
+                else
+                    Log("[boot/0.5] guest VM sparse read/write FAILED");
+            } else {
+                char line[150] = {};
+                sprintf_s(line, "[boot/0.5] guest VM sparse commit FAILED: Win32=%lu",
+                          static_cast<unsigned long>(guestVm.last_error()));
+                Log(line);
+            }
+        }
+        Log("[boot/0.5] Phase 2: load generated recomp function/import table");
+        HeadlessBootReport report = {};
+        const int bootStatus = nsmbu_headless_public_boot(&report);
+        {
+            char line[260] = {};
+            sprintf_s(line,
+                      "[boot/0.5] table: entry=%08X funcs=%u imports=%u; native guest r3=%u; host slot=%08X r3=%u; unknown rejected=%u",
+                      report.entry_address, report.recompiled_function_count,
+                      report.recompiled_import_count, report.guest_result,
+                      report.host_address, report.host_result,
+                      report.unknown_address_rejected);
+            Log(line);
+        }
+        Log(bootStatus == 0
+            ? "[boot/0.5] guest-address dispatch + synthetic HLE callback PASSED (42 -> 50)"
+            : "[boot/0.5] guest-address dispatch / synthetic HLE callback FAILED");
+        Log("[boot/0.5] Phase 3: preserve verified D3D12 graphics path");
         if (!gfxd3d12::format_mapping_self_test()) {
             Log("GX2->DXGI format mapping self-test FAILED");
         } else {
