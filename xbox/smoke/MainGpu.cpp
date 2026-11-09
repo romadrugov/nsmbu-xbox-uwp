@@ -14,6 +14,11 @@
 #include "gfx/d3d12/texture_upload.h"
 #include "gfx/d3d12/gx2_detile.h"
 #include "gfx/d3d12/gx2_macro_detile.h"
+#include "gfx/d3d12/backend_probe.h"
+
+// renderer.cpp is not linked into the UWP smoke test; production builds
+// provide this symbol themselves. Do not define it in backend_probe.cpp.
+namespace render { const Backend* g_backend = nullptr; }
 #include <array>
 #include <climits>
 #include "GpuShadersVS.h"
@@ -137,7 +142,7 @@ public:
         if (fenceEvent_) CloseHandle(fenceEvent_);
     }
 
-    void Draw(bool buttonA) {
+    void Draw(const float rgba[4], bool drawQuad) {
         const UINT index = swapChain_->GetCurrentBackBufferIndex();
         Check(allocator_->Reset(), L"Allocator Reset");
         Check(list_->Reset(allocator_.Get(), nullptr), L"CommandList Reset");
@@ -152,11 +157,10 @@ public:
 
         auto handle = rtvHeap_->GetCPUDescriptorHandleForHeapStart();
         handle.ptr += index * device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-        // Alternating shades confirm the GPU is continuously drawing, rather than showing a static splash.
-        const float pulse = buttonA ? 0.52f : ((frame_ / 60) % 2 == 0 ? 0.15f : 0.30f);
-        const FLOAT clear[4] = {0.05f, pulse, 0.35f, 1.0f};
-        list_->ClearRenderTargetView(handle, clear, 0, nullptr);
+        // Color comes through the real render::Backend command interface.
+        list_->ClearRenderTargetView(handle, rgba, 0, nullptr);
         list_->OMSetRenderTargets(1, &handle, FALSE, nullptr);
+        if (drawQuad) {
         const D3D12_VIEWPORT viewport = {0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f};
         const D3D12_RECT scissor = {0, 0, 1280, 720};
         list_->RSSetViewports(1, &viewport);
@@ -168,6 +172,7 @@ public:
         list_->SetGraphicsRootDescriptorTable(0, srvHeap_->GetGPUDescriptorHandleForHeapStart());
         list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         list_->DrawInstanced(6, 1, 0, 0);
+        }
 
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -401,7 +406,7 @@ public:
         // First pump WinRT activation, THEN initialize D3D12 and LocalState logging.
         window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
         OpenLog();
-        Log("NSMBU Xbox GX2 Macro Detile Probe v0.2.0 started");
+        Log("NSMBU Xbox render::Backend Probe v0.3.0 started");
         if (!gfxd3d12::format_mapping_self_test()) {
             Log("GX2->DXGI format mapping self-test FAILED");
         } else {
@@ -415,7 +420,14 @@ public:
             Log("GX2 detile CPU self-test PASSED (linear aligned, 1D thin1, 13x9, bounds)");
             Log("Starting D3D12 backend");
             D3D12Smoke graphics(reinterpret_cast<IUnknown*>(window_));
-            Log("D3D12 backend ready; rendering textured quad and polling Xbox Gamepad");
+            gfxd3d12::attach_probe_host({
+                &graphics,
+                [](void* context, const float rgba[4], bool drawQuad) {
+                    static_cast<D3D12Smoke*>(context)->Draw(rgba, drawQuad);
+                }
+            });
+            render::g_backend = &gfxd3d12::probe_backend();
+            Log("render::Backend D3D12 probe attached; guest GX2 draw calls unsupported");
             bool oldA = false;
             bool warningLogged = false;
             while (!closed_) {
@@ -441,7 +453,15 @@ public:
                     Log(buttonA ? "Gamepad A PRESSED" : "Gamepad A RELEASED");
                     oldA = buttonA;
                 }
-                graphics.Draw(buttonA);
+                const uint64_t frame = gfxd3d12::probe_frame_count();
+                const float pulse = buttonA ? 0.52f :
+                    (((frame / 60) % 2) == 0 ? 0.15f : 0.30f);
+                const float rgba[4] = {0.05f, pulse, 0.35f, 1.0f};
+                render::clear_color(nullptr, gfxd3d12::kProbeColorTarget, rgba);
+                render::draw(nullptr, gfxd3d12::kProbePrimitive, 6, 0, 0, 0, 1);
+                render::swap();
+                if (frame == 0)
+                    Log("render::Backend dispatch first clear/draw/swap PASSED");
             }
             Log("Window closed normally");
         } catch (const std::exception& error) {
@@ -454,6 +474,8 @@ public:
         } catch (...) {
             Log("Unknown native exception during GPU test");
         }
+        render::g_backend = nullptr;
+        gfxd3d12::detach_probe_host();
         // A failing GPU probe intentionally keeps the known-good WinRT view alive.
         // The last successful checkpoint is in LocalState/nsmbu_xbox_diag.txt.
         while (!closed_) {
