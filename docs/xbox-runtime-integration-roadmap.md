@@ -212,6 +212,67 @@ dependencies incrementally, and verify the resulting AppContainer
 PE import table. Then proceed to a fully private test with actual
 generated game functions after MSVC-compatible ABI compilation.
 
+## R2: first actual Cafe OS HLE link + host execution — PASS
+
+Cross-compiler UWP HLE linker gate:
+https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42804060393
+
+Executable behavior and PE audit:
+https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42804892979
+
+### Evidence
+
+* The unchanged upstream \`runtime/src/hle/coreinit_mem.cpp\` is compiled
+  with \`clang-cl\` for the Windows APP API family and **linked into a
+  separate MSVC/C++-CX x64 UWP executable**. The successful original
+  HLE link probe yielded a **43,520-byte** executable; it is a
+  **compile/link test only**, not an Xbox activation.
+* The \`xbox/runtime-compat/hle_link_probe.cpp\` bridge references
+  genuine \`imp_coreinit_OSIsAddressRangeDCValid\` and
+  \`imp_coreinit_MEMGetBaseHeapHandle\` exports. Linker cannot replace
+  these with dummy exports from the public host fixture.
+* The initial real-HLE link exposed five host dependencies:
+  \`log_msg\`, \`g_trace_hle\`, \`dispatch::register_host\`,
+  \`wwatch::hint\`, \`HleReg::HleReg\`. To isolate the **ABI** test
+  without pulling in all production runtime, the
+  \`hle_link_host.cpp\` test adapter supplies these symbols;
+  unsupported dispatcher and write-watch calls deliberately abort.
+  The registration adapter has its own tiny test registry, **not**
+  the original runtime registry. These adapters are NEVER linked
+  into the shipping Xbox application.
+* The WinRT \`vccorlib\` vs MSVCRT initialization conflict
+  (LNK2038/LNK2005) was fixed in the isolated HLE project by
+  explicitly ordering CRT libraries with default library selection
+  suppressed. This is local to the HLE test project.
+* Windows desktop behavioral test uses the **same** upstream
+  \`coreinit_mem\` clang-cl object and bridge, with an exact 64 KiB
+  address mapping at \`PPC_MEM_BASE + 0x10010000\`. The program
+  **ran and exited successfully** after creating an exp heap,
+  allocating 256 bytes at 32-byte alignment, freeing it,
+  checking free size, verifying the big-endian EXP heap magic,
+  destroying the heap and checking registration of the two
+  HLE functions. The test may not run on all hosts if the fixed
+  guest address is unavailable; the CI host did accept it.
+* The HLE UWP executable PE audit confirmed x64 AppContainer and
+  no obvious desktop MSVC CRT, USER32 or KERNEL32 direct imports.
+  This is not proof all future runtime modules use UWP-compatible APIs.
+
+### Remaining work (not achieved)
+
+* Replace the test-only host support with production
+  \`core/core.cpp\` registry/dispatch/logging and real
+  \`write_watch\`, then link the same HLE entry points into the
+  **actual** UWP application. Test runtime startup order and
+  guest memory reservation, not only PE headers.
+* Feed a **public three-instruction PowerPC fixture** through real
+  HLE dispatch on Xbox to verify actual runtime integration. Keep
+  private \`USA_V0\` RPX, generated C and COFF out of CI.
+* Recompile private game C for Windows Store/MSVC ABI with matching
+  headers and test private link; existing Zig windows-gnu archive
+  is not yet validated for this purpose.
+* Xbox device execution of Cafe OS heap and any real game function
+  remains **unverified**.
+
 ## Explicitly not claimed
 
 * 10–15% or any other overall completion estimate is not measured.
