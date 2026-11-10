@@ -1,0 +1,37 @@
+name: NSMBU Xbox R2.3 - signed public device probe
+
+on:
+  push:
+    branches: [xbox-r23-device-probe]
+    paths:
+      - ".github/workflows/xbox-r23-device-probe.yml"
+      - "xbox/runtime-compat/**"
+      - "runtime/src/core/core.cpp"
+      - "runtime/src/core/xbox_guest_vm.cpp"
+      - "runtime/src/hle/coreinit_mem.cpp"
+      - "runtime/include/ppc.h"
+      - "recomp/android_fixture.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-public-appx:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and validate R2.3 UWP AppContainer, D3D12 and actual HLE
+        shell: pwsh
+        run: ./xbox/runtime-compat/build-r23-xbox-appx.ps1
+      - name: Publish self-signed public-only Xbox device test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nsmbu-xbox-r23-public-runtime-probe
+          path: |
+            xbox/runtime-compat/output-r23/NSMBUR23XboxProbe_0.8.3.0_x64.appx
+            xbox/runtime-compat/output-r23/NSMBUR23XboxProbe.cer
+            xbox/runtime-compat/output-r23/Microsoft.VCLibs.x64.14.00.appx
+          if-no-files-found: error
+          retention-days: 14
