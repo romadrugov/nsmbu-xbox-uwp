@@ -92,4 +92,3 @@ jobs:
           # An unresolved linker result is the expected output of this inventory,
           # never a successful integration claim. Avoid pwsh propagating LASTEXITCODE.
           exit 0
-          }
