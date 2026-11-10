@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/xbox-r24-leaf.yml"
       - "tools/xbox/r24_leaf_select.py"
+      - "xbox/runtime-compat/r24_*"
       - "tools/xbox/test_r24_leaf_select.py"
       - "tools/xbox/private_gamecode.py"
       - "runtime/include/ppc.h"
@@ -56,3 +57,12 @@ jobs:
             exit 1
           fi
           echo "R2.4 public source boundary: PASS"
+
+  public-dispatch-wiring:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise production dispatcher with separately bound public PowerPC function
+        shell: pwsh
+        run: ./xbox/runtime-compat/test-r24-public-dispatch.ps1
