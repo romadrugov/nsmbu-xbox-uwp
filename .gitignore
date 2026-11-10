@@ -55,3 +55,13 @@ runtime/ios/build-sim/
 /xbox/smoke/*.VC.db
 /xbox/smoke/*.VC.opendb
 /xbox/smoke/*.user
+
+
+# Private Xbox v0.8 recompilation: derived source and COFF objects must
+# remain outside checkout. These patterns are extra accident prevention,
+# not a replacement for the local path checks in tools/xbox/.
+code_*.c
+/xbox/smoke/generated/
+*.obj
+*.lib
+/NSMBU-Xbox-private/
