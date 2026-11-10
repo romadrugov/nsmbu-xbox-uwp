@@ -42,7 +42,9 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
-      <AdditionalDependencies>$(ProjectDir)NSMBURuntimeCompat.lib;$(ProjectDir)coreinit_mem_uwp_compat.obj;$(ProjectDir)hle_link_probe.obj;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- C++/CX UWP requires vccorlib before the static C++ CRT. -->
+      <AdditionalOptions>/NODEFAULTLIB:vccorlib /NODEFAULTLIB:msvcrt %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>vccorlib.lib;msvcrt.lib;$(ProjectDir)NSMBURuntimeCompat.lib;$(ProjectDir)coreinit_mem_uwp_compat.obj;$(ProjectDir)hle_link_probe.obj;$(ProjectDir)hle_link_host.obj;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup><ClCompile Include="hle_probe_main.cpp" /></ItemGroup>
