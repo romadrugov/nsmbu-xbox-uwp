@@ -20,6 +20,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <exception>
 #include <map>
 #include <mutex>
 #include <thread>
@@ -1470,11 +1471,20 @@ void reset_for_reboot() {
         if (!t->exited) {
             LOG("[thread] leftover guest thread still running guest=%08X; forcing host stop", t->guest);
 #ifdef _WIN32
+#if defined(NSMBU_XBOX_UWP)
+            // Xbox UWP does not expose TerminateThread. Never destroy a live
+            // HostThread, since it may still access guest memory or its fields.
+            // A non-cooperative reboot is unrecoverable until shutdown is made
+            // cooperative; stop safely rather than introduce use-after-free.
+            LOG("[thread] UWP reboot cannot stop non-cooperative guest=%08X", t->guest);
+            std::terminate();
+#else
             if (t->pt) {
                 TerminateThread(t->pt, 0);
                 CloseHandle(t->pt);
                 t->pt = nullptr;
             }
+#endif
 #else
             if (t->pt) {
                 pthread_kill(t->pt, SIGUSR1);
