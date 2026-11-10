@@ -248,6 +248,11 @@ jobs:
           $bridge = Join-Path $dir 'hle_link_probe.obj'
           & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++17 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/Fo$bridge" (Join-Path $dir 'hle_link_probe.cpp')
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bridge)) { throw 'HLE ABI bridge compile failed' }
+
+          $hostShim = Join-Path $dir 'hle_link_host.obj'
+          & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++17 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/Fo$hostShim" (Join-Path $dir 'hle_link_host.cpp')
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $hostShim)) { throw 'Isolated HLE host adapter compile failed' }
+
           $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
           $vs = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
           $msbuild = Join-Path $vs 'MSBuild/Current/Bin/MSBuild.exe'
