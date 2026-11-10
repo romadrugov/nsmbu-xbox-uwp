@@ -45,10 +45,62 @@ $flags = @('/nologo','/c','/O2','/MD','/EHsc','/clang:-std=c++20',
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bridge)) { throw 'R2.4 real HLE bridge compilation failed' }
 Write-Host 'R2.4 HLE bridge COMPILE PASS'
 
+# R2.3 HLE bridge remains; also compile the new R2.4 dispatch bridge.
+$r24bridge = Join-Path $objects 'r24bridge.obj'
+$r24flags = @('/nologo','/c','/O2','/MD','/EHsc','/clang:-std=c++20',
+    '/DWINAPI_FAMILY=WINAPI_FAMILY_APP','/DNSMBU_XBOX_UWP=1',
+    '/D_CRT_SECURE_NO_WARNINGS',
+    "/I$(Join-Path $root 'runtime/src')","/I$(Join-Path $root 'runtime/include')",
+    "/Fo$r24bridge",(Join-Path $dir 'r24_private_dispatch.cpp'))
+& $clang @r24flags
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $r24bridge)) { throw 'R24 bridge compile failed' }
+
+# Only the private workflow supplies externally staged COFF files.
+if ($PrivateInputDirectory) {
+    $inputDir = (Resolve-Path $PrivateInputDirectory -ErrorAction Stop).Path
+    $selectedObj = Join-Path $inputDir 'r24_selected.obj'
+    $bindingObj = Join-Path $inputDir 'r24_private_binding.obj'
+    Write-Host 'R2.4 external PRIVATE COFF input mode'
+} else {
+    $selectedObj = Join-Path $objects 'r24_public_selected.obj'
+    $bindingObj = Join-Path $objects 'r24_public_only_binding.obj'
+    $publicFlags = @('/nologo','/c','/O2','/MD','/clang:-std=c11',
+        '/DWINAPI_FAMILY=WINAPI_FAMILY_APP',"/I$(Join-Path $root 'runtime/include')")
+    foreach ($name in @('r24_public_selected.c','r24_public_only_binding.c')) {
+        $destination = Join-Path $objects ($name.Replace('.c', '.obj'))
+        & $clang @publicFlags "/Fo$destination" (Join-Path $dir $name)
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $destination)) {
+            throw "R2.4 public synthetic source failed to compile: $name"
+        }
+    }
+    Write-Host 'R2.4 PUBLIC synthetic-only input mode'
+}
+foreach ($file in @($selectedObj, $bindingObj)) {
+    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing COFF object: $file" }
+    if ((Get-Item $file).Length -gt 262144) { throw "Unexpectedly large R2.4 leaf object: $file" }
+    $machine = & $dumpbin /headers $file | Out-String
+    if ($LASTEXITCODE -ne 0 -or $machine -notmatch '(?i)8664 machine \(x64\)') {
+        throw "Not AMD64 COFF: $file"
+    }
+}
+$selectedSymbols = & $dumpbin /symbols $selectedObj | Out-String
+if ($LASTEXITCODE -ne 0 -or $selectedSymbols -notmatch 'nsmbu_r24_private_function') {
+    throw 'COFF selected function symbol missing'
+}
+$bindingSymbols = & $dumpbin /symbols $bindingObj | Out-String
+if ($LASTEXITCODE -ne 0) { throw 'COFF binding audit failed' }
+foreach ($symbol in @('g_r24_private_function','g_r24_guest_address',
+                      'g_r24_expected_r3','g_r24_expected_r4','g_r24_expected_lr')) {
+    if ($bindingSymbols -notmatch $symbol) { throw "Binding symbol missing: $symbol" }
+}
+Write-Host 'R2.4 COFF x64 architecture and exported-symbol audit PASS'
+
+
 $msbuildArgs = @((Join-Path $dir 'NSMBUR24XboxProbe.vcxproj'),'/t:Build','/m','/v:minimal',
     '/p:Configuration=Release','/p:Platform=x64',
     "/p:WindowsTargetPlatformVersion=$($sdk.Name)","/p:R2ZlibLib=$zlibLib",
-    '/p:GenerateAppxPackageOnBuild=false','/p:AppxPackageSigningEnabled=false')
+    '/p:GenerateAppxPackageOnBuild=false','/p:AppxPackageSigningEnabled=false',
+    "/p:R24SelectedObj=$selectedObj", "/p:R24BindingObj=$bindingObj")
 & $msbuild @msbuildArgs
 if ($LASTEXITCODE -ne 0) { throw 'R2.4 Xbox UWP build failed' }
 $exe = Get-ChildItem $dir -Filter 'NSMBUR24XboxProbe.exe' -File -Recurse | Select-Object -First 1
