@@ -40,10 +40,88 @@ if (-not (Test-Path $vcpkg)) { throw 'vcpkg missing' }
 & $vcpkg install zlib:x64-uwp --disable-metrics
 if ($LASTEXITCODE -ne 0) { throw 'Could not prepare zlib:x64-uwp' }
 $zlibInclude = Join-Path $vcpkgRoot 'installed/x64-uwp/include'
-$zlibLib = Join-Path $vcpkgRoot 'installed/x64-uwp/lib/zlib.lib'
-if (-not (Test-Path (Join-Path $zlibInclude 'zlib.h')) -or -not (Test-Path $zlibLib)) {
+$zlibLibDir = Join-Path $vcpkgRoot 'installed/x64-uwp/lib'
+$zlibCandidates = @(Get-ChildItem $zlibLibDir -File -Filter '*zlib*.lib' -ErrorAction Stop)
+Write-Host "UWP zlib library candidates: $($zlibCandidates.Name -join ', ')"
+if (-not (Test-Path (Join-Path $zlibInclude 'zlib.h')) -or $zlibCandidates.Count -eq 0) {
     throw 'UWP zlib headers/library missing'
 }
+$zlibLib = ($zlibCandidates | Where-Object { $_.Name -match '^zlib(?:static)?\\.lib
+
+# Original upstream modules; no test-only HLE registry or dispatcher shims.
+$cxxOptions = @('/nologo','/c','/O1','/MD','/EHsc','/clang:-std=c++20',
+    '/DWINAPI_FAMILY=WINAPI_FAMILY_APP','/DNSMBU_XBOX_UWP=1',
+    '/D_CRT_SECURE_NO_WARNINGS',
+    "/I$(Join-Path $root 'runtime/src')",
+    "/I$(Join-Path $root 'runtime/include')",
+    "/I$zlibInclude")
+$cxxSources = @(
+    @('runtime/src/core/core.cpp', 'core.obj'),
+    @('runtime/src/hle/coreinit_mem.cpp', 'coreinit_mem.obj'),
+    @('runtime/src/core/write_watch.cpp', 'write_watch.obj'),
+    @('xbox/runtime-compat/r2_real_dispatch_probe.cpp', 'probe.obj'),
+    @('xbox/runtime-compat/r2_public_guest_hooks.cpp', 'guest_hooks.obj')
+)
+$objects = @()
+foreach ($entry in $cxxSources) {
+    $source = Join-Path $root $entry[0]
+    $object = Join-Path $out $entry[1]
+    & $clang @cxxOptions "/Fo$object" $source
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $object)) {
+        throw "clang-cl compile failed: $($entry[0])"
+    }
+    Write-Host "R2 COMPILE PASS: $($entry[0])"
+    $objects += $object
+}
+
+# Reuse the actual recompilation generator and its table.c. No private RPX.
+$fixture = Join-Path $out 'authored-ppc-fixture'
+& py -3 (Join-Path $root 'recomp/android_fixture.py') --output $fixture
+if ($LASTEXITCODE -ne 0) { throw 'Public PPC recompilation failed' }
+$generated = Join-Path $fixture 'gen'
+if (-not (Test-Path (Join-Path $generated 'table.c'))) { throw 'Public generated table.c missing' }
+$generatedSources = @(Get-ChildItem $generated -File -Filter '*.c' |
+    Where-Object { $_.Name -notin @('harness.c','imports.c') })
+if ($generatedSources.Count -lt 2) { throw 'Missing actual generated PPC function body or table.c' }
+$cOptions = @('/nologo','/c','/O2','/MD','/clang:-std=c11',
+    '/DWINAPI_FAMILY=WINAPI_FAMILY_APP',
+    "/I$generated",
+    "/I$(Join-Path $root 'runtime/include')",
+    "/I$(Join-Path $root 'runtime/src')")
+foreach ($source in $generatedSources) {
+    $object = Join-Path $out ($source.BaseName + '.obj')
+    & $clang @cOptions "/Fo$object" $source.FullName
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $object)) {
+        throw "Public recompilation output failed to compile: $($source.Name)"
+    }
+    Write-Host "R2 RECOMP COMPILE PASS: $($source.Name)"
+    $objects += $object
+}
+
+# Real core.cpp links more than HLE alone: OneCore supplies APP-family
+# allocation/protection; zlib:x64-uwp handles the RPX loader dependency;
+# real write_watch.cpp resolves wwatch::init/hint; generated table.c
+# supplies g_recomp_* with no fabricated symbols.
+$core = Join-Path $out 'core.obj'
+$symbols = & $dumpbin /symbols $core | Out-String
+if ($LASTEXITCODE -ne 0 -or $symbols -notmatch 'hle_find' -or $symbols -notmatch 'register_host') {
+    throw 'Production core.obj HLE/dispatch symbols missing'
+}
+$exe = Join-Path $out 'r2_production_dispatch.exe'
+& $clang /nologo @objects $onecore $zlibLib "/Fe:$exe" '/link' '/SUBSYSTEM:CONSOLE'
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $exe)) {
+    throw 'R2 production core/HLE/recompiled guest link FAILED; inspect preceding unresolved symbols'
+}
+Write-Host "R2 LINK PASS: original core.cpp, coreinit_mem.cpp, write_watch.cpp, public generated guest; $exe"
+& $dumpbin /dependents $exe
+if ($LASTEXITCODE -ne 0) { throw 'PE dependency inspection failed' }
+& $exe
+if ($LASTEXITCODE -ne 0) { throw "R2 behavior test FAILED with exit code $LASTEXITCODE" }
+Write-Host 'R2 EXECUTION PASS: genuine registry + generated guest (42) + HLE heap lifecycle.'
+"## R2.1 production dispatch host test\n\n**PASS:** unchanged real runtime core/HLE/write-watch linked to public recomp-generated guest, Windows host test executed (guest = 42, HLE + heap roundtrip). No actual Xbox UWP activation or private game code was tested." >> $env:GITHUB_STEP_SUMMARY
+ } | Select-Object -First 1)
+if (-not $zlibLib) { $zlibLib = $zlibCandidates | Select-Object -First 1 }
+$zlibLib = $zlibLib.FullName
 
 # Original upstream modules; no test-only HLE registry or dispatcher shims.
 $cxxOptions = @('/nologo','/c','/O1','/MD','/EHsc','/clang:-std=c++20',
