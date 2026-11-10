@@ -85,3 +85,66 @@ artifact the generated game code.**
 There is deliberately NO Xbox 0.8.0 AppX yet: a new synthetic-only
 binary would not satisfy the goal of executing a real Mario function.
 The physical-console rollback branch is xbox-uwp-stable-0.7.0.
+
+
+## First real COFF object — private compiler probe
+
+The user has already verified USA_V0 and generated 84,231 functions,
+2,821 imports and 93 C chunks (245,976,057 bytes) privately.
+Do NOT rerun the full recompiler unless necessary.
+
+### On the Mac (metadata only)
+
+From the public repo checkout:
+
+~~~sh
+git fetch origin xbox-uwp
+git switch xbox-uwp
+git pull --ff-only
+python3 tools/xbox/private_compile_one.py plan \
+  --generated "$HOME/NSMBU-Xbox-private/USA_V0/generated" \
+  --summary "$HOME/NSMBU-Xbox-private/USA_V0/summary.json"
+~~~
+
+The tool verifies the generated inventory against the confirmed
+private summary, chooses the smallest code_NNN.c chunk, and reports
+just the filename, size and SHA256. It cannot compile Xbox UWP
+binaries on the Mac's default toolchain. No uploads or code execution.
+
+### On a private Windows x64 developer machine
+
+Install Visual Studio C++ tools, Windows SDK, and LLVM clang-cl;
+open an x64 Visual Studio Developer PowerShell. Transfer the PRIVATE
+generated directory and its summary from the Mac to a private Windows
+directory by a method you control (not public GitHub Actions).
+
+In the same public repo checkout on Windows, run this one-line command
+after replacing the D: paths:
+
+~~~powershell
+py -3 tools/xbox/private_compile_one.py compile --generated "D:\NSMBU-Xbox-private\USA_V0\generated" --summary "D:\NSMBU-Xbox-private\USA_V0\summary.json" --out "D:\NSMBU-Xbox-private\USA_V0\coff-probe"
+~~~
+
+The compiler produces these files OUTSIDE the public checkout:
+
+- gamecode_probe.obj — game-derived Windows AMD64 COFF (PRIVATE)
+- compile.log — diagnostic output, may contain source fragments (PRIVATE)
+- compile-summary.json — safe metadata: source chunk filename and SHA,
+  object size and SHA, COFF machine 0x8664, and the flags
+  native_xbox_linked=false and game_code_executed_on_xbox=false
+
+Only compile-summary.json is appropriate to share in chat.
+Never upload private RPX, C/H files, the object file, or compile.log.
+
+Public CI runs the identical Windows clang-cl probe with an authored
+three-instruction PowerPC fixture ONLY; no Nintendo game code is used
+or uploaded, and the workflow does not publish objects.
+
+### Scope and next gate
+
+One valid AMD64 COFF object proves a single chunk compiled to
+Windows x64. It does NOT mean the object can be linked against UWP,
+all 93 files build, unresolved imports have implementations, or any
+real Mario function executed. The next step is a PRIVATE link audit,
+then a selected function with known preconditions and controlled guest
+memory state. The last physically validated Xbox version is v0.7.0.
