@@ -279,3 +279,46 @@ https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42804892979
 * Native UWP gameplay is not achieved by archiving compiled COFF.
 * Compiling a C++ source as a Windows Store library does not prove
   it can link to the real game or run on the physical Xbox.
+
+## R2.1: production dispatcher + public recompilation on Windows host — PASS
+
+CI: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42827066528
+Experimental branch: xbox-r2-production-dispatch-probe (not merged into xbox-uwp).
+
+* The actual runtime/src/core/core.cpp, runtime/src/hle/coreinit_mem.cpp,
+  and runtime/src/core/write_watch.cpp compiled and linked with the same
+  independent Windows desktop host executable. No fake HLE registry or
+  test-only dispatch replacement was included in this executable.
+* The real recomp/android_fixture.py produced a public three-instruction
+  PowerPC guest plus code_000.c and table.c. Its entry was installed by
+  production dispatch::init(), invoked via ppc_dispatch(), and returned 42.
+* Production HleReg lookup and dispatch::register_host invoked genuine
+  Cafe OS HLE functions. The exact 64 KiB guest-memory mapping completed
+  exp-heap create, 256-byte aligned allocate, free, available-byte check,
+  big-endian header check and destroy. Windows CI exited with code 0.
+* The original core and HLE compiled with the Windows APP API family;
+  zlib:x64-uwp supplied z.lib and the Windows SDK supplied OneCore.lib.
+
+### Important limitation: Windows host PASS is not Xbox UWP PASS
+
+* Original write_watch.cpp uses AddVectoredExceptionHandler, which is
+  not declared for WINAPI_FAMILY_APP. It was compiled with the desktop
+  API family specifically for this Windows host behavioral test.
+  Therefore its real implementation linked on Windows, but native UWP
+  compilation/activation is still blocked. No fake write-watch shim
+  was substituted and no UWP support is claimed for that code.
+* The test deliberately maps only one guest 64 KiB region and does not
+  call mem::init(), which currently commits a full 4 GiB on Windows.
+  The Xbox smoke target instead uses sparse GuestVm commits.
+* The test is NOT an AppContainer executable or real NSMBU game boot.
+  Real game functions, private assets, packaged AppX activation,
+  physical Xbox heap execution and graphics are still unverified.
+
+### Next independent gate
+
+Implement and validate an appropriate UWP-safe write-tracking strategy
+(or a clearly disabled, fail-closed alternative), then link the same
+production dispatcher/HLE/public fixture as a separate AppContainer
+target without altering stable Xbox 0.7.0. Validate sparse guest-memory
+startup and import table first, then test the real HLE path on Xbox.
+Keep private game code and RPX local.
