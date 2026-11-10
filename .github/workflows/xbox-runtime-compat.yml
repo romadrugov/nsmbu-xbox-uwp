@@ -194,3 +194,37 @@ jobs:
           Write-Host "R1 archive PASS: 13 upstream translation units, Windows AMD64 static library ($bytes bytes)."
           Write-Host 'Object archive only: no UWP executable, no link resolution, no private game code.'
           # Private Nintendo RPX/generated objects are never part of this public CI.
+
+
+      - name: Inspect UWP executable imports and core runtime linkage dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
+          $msvc = Get-ChildItem (Join-Path $vs 'VC/Tools/MSVC') -Directory | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          $dumpbin = Join-Path $msvc.FullName 'bin/Hostx64/x64/dumpbin.exe'
+          $exe = Get-ChildItem 'xbox/runtime-compat' -Filter 'NSMBURuntimeLinkProbe.exe' -Recurse -File | Select-Object -First 1
+          if (-not $exe) { throw 'No UWP link probe exe to audit' }
+
+          Write-Host '==== Public UWP executable imported DLLs ===='
+          & $dumpbin /dependents $exe.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Executable dependency inspection failed' }
+
+          Write-Host '==== Real upstream core/HLE undefined external symbols (pre-link) ===='
+          $paths = @(
+            (Join-Path $env:RUNNER_TEMP 'coreinit_mem_uwp_compat.obj'),
+            (Join-Path $env:RUNNER_TEMP 'nsmbu_r1_threads.obj'),
+            (Join-Path $env:RUNNER_TEMP 'nsmbu_r1_core.obj'),
+            (Join-Path $env:RUNNER_TEMP 'nsmbu_r1_fs.obj')
+          )
+          foreach ($obj in $paths) {
+            if (-not (Test-Path $obj)) { throw "Expected upstream object missing: $obj" }
+            $symbolLines = @(& $dumpbin /symbols $obj)
+            if ($LASTEXITCODE -ne 0) { throw "COFF symbol inspection failed: $obj" }
+            $undefined = @($symbolLines | Where-Object { $_ -match '\bUNDEF\b.+\bExternal\s+\|' })
+            $defined = @($symbolLines | Where-Object { $_ -match '\bSECT[0-9A-F]+\b.+\bExternal\s+\|' })
+            Write-Host "$([IO.Path]::GetFileName($obj)): defined=$($defined.Count), undefined=$($undefined.Count)"
+            Write-Host ($undefined | Select-Object -First 8)
+          }
+          Write-Host 'Counts are unresolved before full linking; they are not necessarily missing implementations.'
