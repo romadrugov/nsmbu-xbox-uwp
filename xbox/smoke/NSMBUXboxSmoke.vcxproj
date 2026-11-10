@@ -61,6 +61,7 @@
     <ClCompile Include="..\\..\\runtime\\src\\gfx\\d3d12\\backend_probe.cpp" />
     <ClCompile Include="..\\..\\runtime\\src\\core\\xbox_guest_vm.cpp" />
     <ClCompile Include="..\\..\\runtime\\src\\core\\rpx_inspect.cpp" />
+    <ClCompile Include="..\\..\\runtime\\src\\core\\rpx_stage.cpp" />
     <ClCompile Include="RpxProbe.cpp" />
   </ItemGroup>
   <ItemGroup><AppxManifest Include="Package.appxmanifest" /></ItemGroup>
