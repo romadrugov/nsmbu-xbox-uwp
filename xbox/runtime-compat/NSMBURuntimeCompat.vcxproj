@@ -31,6 +31,8 @@
       <WarningLevel>Level3</WarningLevel>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <CompileAsWinRT>false</CompileAsWinRT>
+      <!-- Diagnostic gate: use upstream getenv unchanged; no source patch for MSVC C4996. -->
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalOptions>/std:c++17 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\runtime\src;$(ProjectDir)..\..\runtime\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
