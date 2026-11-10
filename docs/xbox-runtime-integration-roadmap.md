@@ -143,6 +143,43 @@ clang-cl/Windows APP-family build of user-owned game functions can
 link to the chosen runtime ABI. Do not copy the 2.1-GB Zig
 Windows-GNU archive into public CI or treat it as proven MSVC ABI.
 
+## R1 → R2: executable link gate — PASS
+
+Workflow run: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42751274786
+
+* The isolated \`xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj\`
+  built and linked a **27,136-byte** Windows Store x64 EXE with
+  \`runtime/src/core/env.cpp\` functions and data supplied by the
+  UWP \`NSMBURuntimeCompat.lib\`, rather than duplicated probe stubs.
+* PE \`dumpbin /headers\` confirmed **machine x64**, **Windows GUI
+  subsystem**, and the **App Container** flag.
+* The build-only probe has a distinct public test manifest, generated
+  public logo assets, and a trivial WinRT metadata marker so UWP
+  build tooling can complete. It is intentionally **not a deployed
+  or activatable Xbox game**; no private Nintendo RPX, generated
+  code or archive was used or uploaded.
+* In the same successful run, all **13** previously tested upstream
+  core/HLE translation units recompiled successfully, and the
+  1,818,168-byte public runtime archive was reproduced.
+
+### Remaining R2 requirements
+
+1. Verify PE imported DLLs against the Xbox UWP activation
+   constraints and explicitly test linkage of a representative
+   clang-cl HLE symbol, not just the portable MSVC \`env.cpp\`.
+2. Construct an ABI bridge between the existing public synthetic
+   recompiled PowerPC fixture and reused upstream memory/dispatch
+   runtime. Preserve known-good synthetic UWP smoke as a separate
+   target and do not substitute fake game code.
+3. In a **private Windows x64 / Windows Store** environment, rebuild
+   the user's actual generated functions using clang-cl/MSVC ABI,
+   link them with the selected runtime and UWP host, and inspect
+   unresolved imports. The Zig Windows-GNU archive's COFF container
+   is not proof that its CRT/runtime ABI works for UWP.
+4. On physical Xbox, verify a bounded real game function and record
+   its trace and controlled failure behavior before attempting game
+   bootstrap and GPU integration.
+
 ## Explicitly not claimed
 
 * 10–15% or any other overall completion estimate is not measured.
