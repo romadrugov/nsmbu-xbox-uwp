@@ -353,7 +353,8 @@ https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42830616600
   Xbox runtime initialization.
 * A separate improvement checks actual committed/readable guest pages
   using UWP-allowed VirtualQuery, rather than assuming reserved pages
-  are readable. This must be verified by the dedicated CI behavior test.
+  are readable. This **passed** in a host behavior test that checked
+  committed versus reserved-only guest pages (run 42830850770).
 
 ### Next: R2.3 physical Xbox guest-memory / HLE activation
 
