@@ -52,6 +52,60 @@ const Section* section_named(const Image& image, const char* name) {
     return nullptr;
 }
 
+
+bool decode_section(const uint8_t* file, size_t file_size, const Section& section,
+                    std::vector<uint8_t>& output, std::string& error) {
+    constexpr size_t kSectionLimit = 32u * 1024u * 1024u;
+    const size_t decodedSize = section.memory_bytes;
+    if (decodedSize > kSectionLimit)
+        return fail(error, "RPX decoded section exceeds 32 MiB budget");
+    if (section.type == kNoBits) {
+        if (section.compressed)
+            return fail(error, "NOBITS section cannot be compressed");
+        std::vector<uint8_t> zero(decodedSize, 0u);
+        output.swap(zero);
+        error.clear();
+        return true;
+    }
+    if (!file || !range(file_size, section.file_offset, section.file_bytes))
+        return fail(error, "RPX section payload is outside file bounds");
+    const uint8_t* raw = file + section.file_offset;
+    if (!section.compressed) {
+        if (decodedSize != section.file_bytes)
+            return fail(error, "uncompressed RPX section has mismatched length");
+        std::vector<uint8_t> decoded(raw, raw + decodedSize);
+        output.swap(decoded);
+        error.clear();
+        return true;
+    }
+    if (section.file_bytes < 10u)
+        return fail(error, "compressed RPX section too short");
+    if (u32(raw) != decodedSize || decodedSize == 0)
+        return fail(error, "RPX compressed section size prefix mismatch");
+    const uint8_t* stream = raw + 4u;
+    const size_t streamBytes = size_t(section.file_bytes) - 4u;
+    if (streamBytes > kSectionLimit)
+        return fail(error, "RPX compressed section exceeds input budget");
+    const unsigned zlibHeader = (unsigned(stream[0]) << 8u) | stream[1];
+    if ((stream[0] & 15u) != 8u || (stream[0] >> 4u) > 7u ||
+        zlibHeader % 31u != 0u || (stream[1] & 0x20u) != 0u)
+        return fail(error, "unsupported zlib header in RPX section");
+    // sinfl's optimized bitreader can look a few bytes ahead at the end
+    // of the stream; pad both buffers, but bound the actual output length.
+    std::vector<uint8_t> paddedInput(streamBytes + 64u, 0u);
+    std::memcpy(paddedInput.data(), stream, streamBytes);
+    std::vector<uint8_t> paddedOutput(decodedSize + 64u, 0u);
+    const int result = zsinflate(paddedOutput.data(), int(decodedSize),
+                                paddedInput.data(), int(streamBytes));
+    if (result != int(decodedSize))
+        return fail(error, "RPX section zlib decompression or checksum failed");
+    std::vector<uint8_t> decoded(paddedOutput.begin(), paddedOutput.begin() + decodedSize);
+    output.swap(decoded);
+    error.clear();
+    return true;
+}
+
+
 bool inspect(const uint8_t* bytes, size_t count,
              Image& output, std::string& error) {
     if (!bytes || count < kElfHeader || count > kMaxFileBytes)
