@@ -9,6 +9,7 @@ on:
       - "runtime/src/core/env.h"
       - "runtime/src/hle/**"
       - "runtime/src/core/threads.cpp"
+      - "runtime/src/core/core.cpp"
       - "runtime/src/platform/**"
       - "runtime/src/mods/**"
       - "runtime/src/input/**"
@@ -84,7 +85,13 @@ jobs:
             'runtime/src/hle/fs.cpp',
             'runtime/src/hle/padscore.cpp',
             'runtime/src/hle/ax.cpp',
-            'runtime/src/core/threads.cpp'
+            'runtime/src/core/threads.cpp',
+            'runtime/src/hle/coreinit_misc.cpp',
+            'runtime/src/hle/erreula.cpp',
+            'runtime/src/hle/snd_user.cpp',
+            'runtime/src/hle/swkbd.cpp',
+            'runtime/src/hle/system_stubs.cpp',
+            'runtime/src/core/core.cpp'
           )
           $failed = @()
           foreach ($relative in $files) {
@@ -104,5 +111,5 @@ jobs:
             Write-Host "R1 blockers: $($failed -join ', ')"
             throw "$($failed.Count) upstream sources did not compile for Windows APP-family"
           }
-          Write-Host "All four additional upstream sources compiled as x64 COFF objects."
+          Write-Host "All additional upstream sources compiled as x64 COFF objects."
 
