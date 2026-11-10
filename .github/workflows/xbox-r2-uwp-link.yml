@@ -1,0 +1,30 @@
+name: NSMBU Xbox - R2.2 UWP AppContainer link gate
+
+on:
+  push:
+    branches: [xbox-r2-production-dispatch-probe]
+    paths:
+      - ".github/workflows/xbox-r2-uwp-link.yml"
+      - "xbox/runtime-compat/r2_uwp_*"
+      - "xbox/runtime-compat/NSMBUR2UwpLinkProbe.vcxproj"
+      - "xbox/runtime-compat/PackageR2.appxmanifest"
+      - "xbox/runtime-compat/test-r2-uwp-link.ps1"
+      - "xbox/runtime-compat/r2_public_guest_hooks.cpp"
+      - "runtime/src/core/core.cpp"
+      - "runtime/src/hle/coreinit_mem.cpp"
+      - "runtime/include/ppc.h"
+      - "recomp/android_fixture.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  appcontainer-link:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and link production Cafe OS HLE with UWP write tracking and public PowerPC
+        shell: pwsh
+        run: ./xbox/runtime-compat/test-r2-uwp-link.ps1
