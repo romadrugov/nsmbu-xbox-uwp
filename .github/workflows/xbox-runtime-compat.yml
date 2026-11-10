@@ -48,6 +48,151 @@ jobs:
           Write-Host "R1 compile-only PASS: real upstream core/env.cpp -> Windows Store x64 static library ($($lib.Length) bytes)"
           Write-Host 'NOT a game binary; NOT linked to UWP executable; NO Nintendo data.'
 
+      - name: Link real upstream env library into synthetic UWP executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
+          if (-not $vs) { throw 'Visual Studio not installed' }
+          $msbuild = Join-Path $vs 'MSBuild/Current/Bin/MSBuild.exe'
+          $msvc = Get-ChildItem (Join-Path $vs 'VC/Tools/MSVC') -Directory | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          if (-not $msvc) { throw 'MSVC not installed' }
+          $dumpbin = Join-Path $msvc.FullName 'bin/Hostx64/x64/dumpbin.exe'
+          $sdkRoot = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Windows Kits/10'
+          $sdk = (Get-ChildItem (Join-Path $sdkRoot 'Include') -Directory |
+            Where-Object { $_.Name -match '^10\.0\.\d+\.0
+
+      - name: Compile actual upstream Cafe OS memory HLE with standalone clang-cl
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $clangOptions = @(
+            (Get-Command clang-cl.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
+            'C:\Program Files\LLVM\bin\clang-cl.exe'
+          )
+          $clang = $clangOptions | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $clang) { throw 'clang-cl missing for upstream PowerPC builtin syntax' }
+          $root = (Resolve-Path .).Path
+          $out = Join-Path $env:RUNNER_TEMP 'coreinit_mem_uwp_compat.obj'
+          $source = Join-Path $root 'runtime/src/hle/coreinit_mem.cpp'
+          & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++17 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/Fo$out" $source
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $out)) {
+            throw 'Upstream memory HLE source does not yet compile with clang-cl'
+          }
+          Write-Host "R1 clang-cl source compile PASS: coreinit_mem.cpp ($((Get-Item $out).Length) bytes)"
+          Write-Host 'Source-only check, no game or Xbox executable linked.'
+
+          # No upload-artifact: this is a public source compatibility check.
+
+      - name: Prepare zlib UWP development headers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $root -or -not (Test-Path (Join-Path $root 'vcpkg.exe'))) { $root = 'C:\vcpkg' }
+          $vcpkg = Join-Path $root 'vcpkg.exe'
+          if (-not (Test-Path $vcpkg)) { throw "vcpkg not installed at $root" }
+          & $vcpkg install zlib:x64-uwp --disable-metrics
+          if ($LASTEXITCODE -ne 0) { throw 'vcpkg zlib:x64-uwp install failed' }
+          $include = Join-Path $root 'installed/x64-uwp/include'
+          if (-not (Test-Path (Join-Path $include 'zlib.h'))) { throw 'UWP zlib.h missing after install' }
+          "NSMBU_UWP_ZLIB_INCLUDE=$include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'UWP zlib headers available from vcpkg; compile-only, no link.'
+
+      - name: Probe additional real upstream HLE, FS, audio and scheduling files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $clangOptions = @(
+            (Get-Command clang-cl.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
+            'C:\Program Files\LLVM\bin\clang-cl.exe'
+          )
+          $clang = $clangOptions | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $clang) { throw 'clang-cl missing' }
+          $root = (Resolve-Path .).Path
+          $files = @(
+            'runtime/src/hle/fs.cpp',
+            'runtime/src/hle/padscore.cpp',
+            'runtime/src/hle/ax.cpp',
+            'runtime/src/core/threads.cpp',
+            'runtime/src/hle/coreinit_misc.cpp',
+            'runtime/src/hle/erreula.cpp',
+            'runtime/src/hle/snd_user.cpp',
+            'runtime/src/hle/swkbd.cpp',
+            'runtime/src/hle/system_stubs.cpp',
+            'runtime/src/hle/zlib_hle.cpp',
+            'runtime/src/core/core.cpp'
+          )
+          $failed = @()
+          foreach ($relative in $files) {
+            $source = Join-Path $root $relative
+            $stem = [IO.Path]::GetFileNameWithoutExtension($source)
+            $out = Join-Path $env:RUNNER_TEMP "nsmbu_r1_$stem.obj"
+            Write-Host "=== $relative ==="
+            & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++20 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' '/DNSMBU_XBOX_UWP=1' '/D_CRT_SECURE_NO_WARNINGS' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/I$env:NSMBU_UWP_ZLIB_INCLUDE" "/Fo$out" $source
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $out)) {
+              $failed += $relative
+              Write-Host "FAIL: $relative"
+            } else {
+              Write-Host "PASS: $relative ($((Get-Item $out).Length) bytes COFF)"
+            }
+          }
+          if ($failed.Count -gt 0) {
+            Write-Host "R1 blockers: $($failed -join ', ')"
+            throw "$($failed.Count) upstream sources did not compile for Windows APP-family"
+          }
+          Write-Host "All additional upstream sources compiled as x64 COFF objects."
+
+      - name: Archive real upstream runtime COFF objects with MSVC librarian
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
+          if (-not $vs) { throw 'Visual Studio missing' }
+          $msvc = Get-ChildItem (Join-Path $vs 'VC/Tools/MSVC') -Directory | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          if (-not $msvc) { throw 'MSVC tools missing' }
+          $libexe = Join-Path $msvc.FullName 'bin/Hostx64/x64/lib.exe'
+          if (-not (Test-Path $libexe)) { throw 'MSVC librarian missing' }
+          $envlib = Get-ChildItem 'xbox/runtime-compat' -Filter 'NSMBURuntimeCompat.lib' -Recurse -File | Select-Object -First 1
+          if (-not $envlib) { throw 'Base UWP environment library missing' }
+          $obj = @(Get-ChildItem $env:RUNNER_TEMP -Filter 'nsmbu_r1_*.obj' -File)
+          $heap = Join-Path $env:RUNNER_TEMP 'coreinit_mem_uwp_compat.obj'
+          if (-not (Test-Path $heap)) { throw 'Heap HLE object missing' }
+          if ($obj.Count -ne 11) { throw "Expected 11 additional upstream COFF objects, got $($obj.Count)" }
+          $all = @($envlib.FullName, $heap) + @($obj | ForEach-Object { $_.FullName })
+          $out = Join-Path $env:RUNNER_TEMP 'nsmbu_upstream_uwp_compat.lib'
+          & $libexe /nologo '/MACHINE:X64' "/OUT:$out" @all
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $out)) { throw 'MSVC archive of upstream sources failed' }
+          $bytes = (Get-Item $out).Length
+          if ($bytes -lt 100000) { throw "Unexpectedly small runtime archive: $bytes" }
+          Write-Host "R1 archive PASS: 13 upstream translation units, Windows AMD64 static library ($bytes bytes)."
+          Write-Host 'Object archive only: no UWP executable, no link resolution, no private game code.'
+          # Private Nintendo RPX/generated objects are never part of this public CI.
+ } |
+            Sort-Object { [version]$_.Name } -Descending |
+            Select-Object -First 1).Name
+          if (-not $sdk) { throw 'Windows SDK not found' }
+
+          $base = Get-ChildItem 'xbox/runtime-compat' -Filter 'NSMBURuntimeCompat.lib' -Recurse -File | Select-Object -First 1
+          if (-not $base) { throw 'Upstream static library missing' }
+          Copy-Item $base.FullName 'xbox/runtime-compat/NSMBURuntimeCompat.lib' -Force
+
+          $project = 'xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj'
+          & $msbuild $project '/t:Build' '/m' '/v:minimal' '/p:Configuration=Release' '/p:Platform=x64' "/p:WindowsTargetPlatformVersion=$sdk"
+          if ($LASTEXITCODE -ne 0) { throw 'UWP executable link failed' }
+
+          $exe = Get-ChildItem 'xbox/runtime-compat' -Filter 'NSMBURuntimeLinkProbe.exe' -Recurse -File | Select-Object -First 1
+          if (-not $exe) { throw 'UWP executable missing' }
+          $headers = & $dumpbin /headers $exe.FullName | Out-String
+          if ($LASTEXITCODE -ne 0) { throw 'dumpbin failed' }
+          if ($headers -notmatch 'machine \(x64\)') { throw 'Executable not x64' }
+          Write-Host "R1->R2 UWP executable link PASS: $($exe.Name), $($exe.Length) bytes, with upstream env library"
+          Write-Host ($headers -split '\r?\n' | Where-Object { $_ -match 'machine \(x64\)|subsystem|App container' } | Select-Object -First 8)
+          Write-Host 'This is a public synthetic link check, not an Xbox game or deployable AppX. No Nintendo data.'
+
+
       - name: Compile actual upstream Cafe OS memory HLE with standalone clang-cl
         shell: pwsh
         run: |
