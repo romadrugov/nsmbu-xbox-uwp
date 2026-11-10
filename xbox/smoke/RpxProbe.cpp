@@ -1,5 +1,6 @@
 #include "RpxProbe.h"
 #include "core/rpx_inspect.h"
+#include "core/rpx_stage.h"
 #include "generated/PublicRpxFixture.h"
 #include <windows.h>
 #include <bcrypt.h>
@@ -186,9 +187,65 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*)) {
             return;
         }
         log_image(image, log, "LOCAL");
-        // Explicitly no decompression, relocations, guest mapping or execution
-        // of the locally uploaded copyrighted image in this version.
-        log("[rpx/0.6] LOCAL inspection finished; execution DISABLED");
+        // Only byte-identical, known builds may be staged in this experiment.
+        // Never execute source PowerPC from these pages; game function
+        // recompilation and HLE imports are not integrated yet.
+        if (!known) {
+            log("[rpx/0.7] LOCAL staging SKIPPED: unrecognized RPX SHA256");
+        } else if (!guest.active()) {
+            log("[rpx/0.7] LOCAL staging SKIPPED: fixed guest VM unavailable");
+        } else {
+            log("[rpx/0.7] Phase 1: decode eligible sections to CPU buffers (no guest writes)");
+            std::vector<xboxrpx::PreparedSection> sections;
+            if (!xboxrpx::prepare_sections(data.data(), data.size(), image,
+                                           sections, error)) {
+                log("[rpx/0.7] LOCAL section preparation FAILED; no guest writes");
+                log(error.c_str());
+            } else {
+                char detail[220] = {};
+                size_t total = 0;
+                for (const auto& sec : sections) total += sec.bytes.size();
+                sprintf_s(detail,
+                          "[rpx/0.7] staging VALIDATED: sections=%zu bytes=%zu, no overlaps",
+                          sections.size(), total);
+                log(detail);
+                log("[rpx/0.7] Phase 2: commit sparse guest pages and copy checked bytes");
+                size_t completed = 0;
+                size_t written = 0;
+                bool mappingOk = true;
+                for (const auto& sec : sections) {
+                    if (!guest.commit(sec.address, sec.bytes.size())) {
+                        sprintf_s(detail,
+                            "[rpx/0.7] guest commit FAILED: %s addr=%08X len=%zu Win32=%lu",
+                            sec.name.c_str(), sec.address, sec.bytes.size(),
+                            static_cast<unsigned long>(guest.last_error()));
+                        log(detail);
+                        mappingOk = false;
+                        break;
+                    }
+                    uint8_t* dest = guest.ptr(sec.address);
+                    std::memcpy(dest, sec.bytes.data(), sec.bytes.size());
+                    const uint32_t guestCrc = xboxrpx::crc32(dest, sec.bytes.size());
+                    const bool verified = guestCrc == sec.crc32 &&
+                        std::memcmp(dest, sec.bytes.data(), sec.bytes.size()) == 0;
+                    sprintf_s(detail,
+                        "[rpx/0.7] %s: guest=%08X bytes=%zu crc32=%08X %s%s",
+                        sec.name.c_str(), sec.address, sec.bytes.size(), guestCrc,
+                        verified ? "VERIFIED" : "FAILED",
+                        sec.zero_fill ? " (NOBITS zero-fill)" : "");
+                    log(detail);
+                    if (!verified) { mappingOk = false; break; }
+                    ++completed;
+                    written += sec.bytes.size();
+                }
+                sprintf_s(detail,
+                    "[rpx/0.7] LOCAL section mapping %s: %zu/%zu sections, %zu bytes",
+                    mappingOk ? "PASSED" : "INCOMPLETE",
+                    completed, sections.size(), written);
+                log(detail);
+            }
+        }
+        log("[rpx/0.7] LOCAL game execution DISABLED: no entry-point jump, no relocations/HLE");
     } catch (...) {
         log("[rpx/0.6] LOCAL UWP file inspection raised an exception");
     }
