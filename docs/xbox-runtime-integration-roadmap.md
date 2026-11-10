@@ -434,3 +434,40 @@ Local-only guide: xbox/runtime-compat/README-R24-PRIVATE.md
   compile that single function for **Windows UWP x64 MSVC ABI** in a
   LOCAL/PRIVATE environment; package it separately; verify its CPU
   result on Series S. Only the final hardware check can close R2.4.
+
+
+## R2.4 PHYSICAL Xbox Series S result (2026-11-10) — PASS
+
+User installed the PRIVATE x64 0.8.4.0 AppX on a physical Xbox Series S.
+The LocalState nsmbu_r24_diag.txt and green D3D12 screen confirmed:
+* R2.3 tests remain PASS (WinRT/D3D12, 4GiB virtual reserve,
+  64KiB commit, synthetic generated PPC, genuine HLE, write-watch).
+* R2.4 executed **genuine privately recompiled USA_V0 PPC** at
+  0x02002AB8 via production ppc_dispatch, after dispatch::set.
+* Xbox CPU witness r3=00000000 r4=2468ACE0 lr=00000000 exactly
+  matched the independent private local Mac CPU reference.
+* [r24] PASS: single selected recomp function ran via production dispatch.
+* [r24] FINAL PASS and final D3D12 result color presented.
+
+This closes the R2.4 one-function physical execution gate. It does NOT
+prove connected game routines, resource loading, playable rendering,
+or whole-game startup.
+
+## R2.5 — branch-bearing private game function: reconnaissance
+
+Branch: xbox-r25-controlflow-scout
+CI: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42860806845
+Procedure: xbox/runtime-compat/README-R25-BRANCH.md
+
+* A new PRIVATE-Mac read-only C scout reviews the existing generated
+  code_*.c chunks for register-only functions with local forward
+  conditional branches and BLR. It records address/file/instruction
+  counts and diagnostic reject reasons, never copies source or runs it.
+* Public synthetic CI runs 6 tests, including rejection of unknown
+  targets, memory functions, and later backward loop edges.
+* Candidates are **REVIEW ONLY**. No R2.5 game source compiled, no
+  private COFF transferred, no new Xbox AppX and no physical execution.
+* Next gate: user runs the scout against local PRIVATE 93 chunks,
+  shares metadata-only counts, then one selected candidate is manually
+  reviewed and subjected to multiple reference inputs before any
+  device execution.
