@@ -27,10 +27,15 @@ ROOT = Path(__file__).resolve().parents[2]
 FUNCTION = re.compile(r"(?m)^void f_([0-9A-F]{8})\(Cpu\* __restrict c\) \{$")
 FINISH = re.compile(r"(?m)^}\s*$")
 INSN = re.compile(r"/\*\s*([0-9A-F]{8}):\s*([0-9A-F]{8})\s*\*/")
-RETURN_BLR = re.compile(r"\breturn\s*;\s*/\*\s*[0-9A-F]{8}:\s*4E800020\s*\*/")
+RETURN_BLR = re.compile(
+    r"(?:\{\s*(?:c->r\[\d+\]\s*=\s*\w+\s*;\s*)*return;\s*\}|return;)"
+    r"\s*/\*\s*[0-9A-F]{8}:\s*4E800020\s*\*/"
+)
 FALLTHROUGH = re.compile(
-    r"\s*(?:MUSTTAIL return f_[0-9A-F]{8}(?:_orig)?\(c\);"
-    r"(?:\s*/\*[^\n]*\*/)?\s*)?\Z"
+    r"\s*(?:(?:MUSTTAIL return f_[0-9A-F]{8}(?:_orig)?\(c\);"
+    r"(?:\s*/\*[^\n]*\*/)?)|"
+    r"(?:ppc_unimplemented\(c,\s*0x[0-9A-F]{8}u,\s*0\);"
+    r"\s*/\* fell off end of text \*/))?\s*\Z"
 )
 C_CALL = re.compile(r"(?<![\w])([A-Za-z_]\w*)\s*\(")
 DANGEROUS = re.compile(
