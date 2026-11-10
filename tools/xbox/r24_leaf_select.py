@@ -27,30 +27,56 @@ ROOT = Path(__file__).resolve().parents[2]
 FUNCTION = re.compile(r"(?m)^void f_([0-9A-F]{8})\(Cpu\* __restrict c\) \{$")
 FINISH = re.compile(r"(?m)^}\s*$")
 INSN = re.compile(r"/\*\s*([0-9A-F]{8}):\s*([0-9A-F]{8})\s*\*/")
+# ppc2c emits both "return; /* ...blr */" and leaf-local writes such
+# as "{ c->r[3] = r3; return; } /* ...blr */". The latter is common in
+# real optimized recompilation, so the original exact-match was too narrow.
 RETURN_BLR = re.compile(
-    r"(?:\{\s*(?:c->r\[\d+\]\s*=\s*\w+\s*;\s*)*return;\s*\}|return;)"
-    r"\s*/\*\s*[0-9A-F]{8}:\s*4E800020\s*\*/"
-)
-FALLTHROUGH = re.compile(
-    r"\s*(?:(?:MUSTTAIL return f_[0-9A-F]{8}(?:_orig)?\(c\);"
-    r"(?:\s*/\*[^\n]*\*/)?)|"
-    r"(?:ppc_unimplemented\(c,\s*0x[0-9A-F]{8}u,\s*0\);"
-    r"\s*/\* fell off end of text \*/))?\s*\Z"
+    r"(?:\{\s*[^{}]*?\breturn;\s*\}|(?<!\w)return;)"
+    r"\s*/\*\s*([0-9A-F]{8}):\s*4E800020\s*\*/"
 )
 C_CALL = re.compile(r"(?<![\w])([A-Za-z_]\w*)\s*\(")
-DANGEROUS = re.compile(
-    r"\b(?:if|for|while|switch|goto|case|default|break|continue|"
-    r"ld8|ld16|ld32|ld64|st8|st16|st32|st64|"
-    r"ppc_ptr|ppc_dispatch|ppc_unimplemented|ppc_trap|"
-    r"ppc_lwarx|ppc_stwcx|ppc_dcbz|psq_load|psq_store|"
-    r"memcpy|memset|memmove|__atomic|MUSTTAIL|"
-    r"hook_[0-9A-Fa-f]+|site_[0-9A-Fa-f]+|imp_\w+|"
-    r"f_[0-9A-F]{8})\b"
+CONTROL_FLOW = re.compile(
+    r"\b(?:if|else|for|while|do|switch|goto|case|default|break|continue|"
+    r"setjmp|longjmp)\b|(?:^|\n)\s*L_[0-9A-F]{8}\s*:", re.M
 )
-DIRECT_WRITE = re.compile(r"\bc->r\[3\]\s*(?:[+\-*/%&|^]?=(?!=)|\+\+|--)")
-BRANCH_LABEL = re.compile(r"\bL_[0-9A-F]{8}\s*:")
+MEMORY_OR_IMPORT = re.compile(
+    r"\b(?:ld8|ld16|ld32|ld64|st8|st16|st32|st64|"
+    r"ppc_ptr|ppc_dispatch|ppc_unimplemented|ppc_trap|"
+    r"ppc_lwarx|ppc_stwcx|ppc_dcbz|psq_load\w*|psq_store\w*|"
+    r"memcpy|memset|memmove|malloc|calloc|free|realloc|"
+    r"__atomic\w*|__asm__|asm|volatile|"
+    r"hook_[0-9A-Fa-f]+|site_[0-9A-Fa-f]+|imp_\w+|"
+    r"f_[0-9A-F]{8}(?:_orig)?|MUSTTAIL)\b"
+)
+# Only compiler-generated pure register helpers may be used, and the
+# selected fragment is compiled as a standalone C function. Neither an
+# unknown helper nor a potential host syscall is automatically selected.
+PURE_CALLS = frozenset({
+    "PPC_ENTER", "rotl32", "ppc_divw", "ppc_divwu", "ppc_mfcr",
+    "ppc_mtcrf", "ppc_mfxer", "ppc_mtxer", "cr_set_s", "cr_set_u",
+    "cr0_rc", "cr_set_s_m", "cr_set_u_m", "cr0_rc_m",
+    "sizeof", "__builtin_bswap16", "__builtin_bswap32",
+    "__builtin_bswap64", "__builtin_clz", "__builtin_ctz",
+})
+RESULT_WRITE = re.compile(
+    r"\bc->r\[(?:3|4)\]\s*(?:[+\-*/%&|^]?=(?!=)|\+\+|--)"
+)
 SINGLE_LINE_COMMENT = re.compile(r"//[^\n]*")
 BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+MAX_PPC_INSNS = 96
+
+# Each function contributes exactly one of these counters. The report
+# contains counts and guest addresses only, never Nintendo-derived C.
+REASONS = (
+    "no_instruction_comments",
+    "no_unconditional_blr",
+    "prefix_over_96_instructions",
+    "branch_or_complex_control_flow",
+    "memory_import_or_host_side_effect",
+    "unknown_helper_call",
+    "no_r3_or_r4_result",
+    "eligible",
+)
 
 
 def chunks(generated):
@@ -64,56 +90,91 @@ def chunks(generated):
     return root, files
 
 
-def candidates_in_file(path):
+def classify_function(address, filename, inner):
+    """Classify one generated function. No candidate executes at scan time.
+
+    A source file may contain a long linear tail after the first unconditional
+    BLR. We can omit that tail only when the entire prefix has no branch,
+    label, external call or memory access. This is less restrictive than
+    demanding that BLR be the very last emitted instruction, while still
+    rejecting any branch that could reach the omitted code.
+    """
+    instructions = list(INSN.finditer(inner))
+    if not instructions:
+        return None, "no_instruction_comments"
+
+    end = RETURN_BLR.search(inner)
+    if end is None:
+        return None, "no_unconditional_blr"
+
+    prefix = inner[:end.end()]
+    prefix_insns = [m for m in instructions if m.end() <= end.end()]
+    if not (1 <= len(prefix_insns) <= MAX_PPC_INSNS):
+        return None, "prefix_over_96_instructions"
+
+    # Guard against matching a return unrelated to the BLR comment.
+    if prefix_insns[-1].group(2) != "4E800020":
+        return None, "no_unconditional_blr"
+
+    code = BLOCK_COMMENT.sub("", SINGLE_LINE_COMMENT.sub("", prefix))
+    if CONTROL_FLOW.search(code):
+        return None, "branch_or_complex_control_flow"
+    if MEMORY_OR_IMPORT.search(code):
+        return None, "memory_import_or_host_side_effect"
+    if any(name not in PURE_CALLS for name in C_CALL.findall(code)):
+        return None, "unknown_helper_call"
+    if not RESULT_WRITE.search(code):
+        return None, "no_r3_or_r4_result"
+
+    # Only this path is proposed for extraction. Later C compilation and
+    # local reference execution are separate explicit steps, never scan.
+    candidate = {
+        "address": "0x" + address,
+        "file": filename,
+        "instructions": len(prefix_insns),
+        "original_instructions": len(instructions),
+        "ignored_after_unconditional_return": len(instructions) - len(prefix_insns),
+        "last_ppc_opcode": "4E800020",
+        "risk": "register-only-no-branch-no-guest-memory",
+        "_body": ("void nsmbu_r24_private_function(Cpu* __restrict c) {"
+                  + prefix.rstrip() + "\n}\n"),
+    }
+    return candidate, "eligible"
+
+
+def classified_in_file(path):
+    """Yield one result per recognized generated function; never output source."""
     source = path.read_text(encoding="utf-8")
     for match in FUNCTION.finditer(source):
         finish = FINISH.search(source, match.end())
         if finish is None:
+            yield None, "no_instruction_comments"
             continue
         inner = source[match.end():finish.start()]
-        marks = list(INSN.finditer(inner))
-        if not (2 <= len(marks) <= 24):
-            continue
-        if marks[-1].group(2) != "4E800020":
-            continue
-        last = RETURN_BLR.search(inner)
-        if last is None or last.end() != marks[-1].end():
-            continue
-        # The recompiler may append an unreachable call to the following
-        # function. Drop it ONLY after the verified unconditional blr.
-        suffix = inner[last.end():]
-        if not FALLTHROUGH.fullmatch(suffix):
-            continue
-        body = inner[:last.end()]
-        without_comments = BLOCK_COMMENT.sub("", SINGLE_LINE_COMMENT.sub("", body))
-        if DANGEROUS.search(without_comments) or BRANCH_LABEL.search(without_comments):
-            continue
-        if any(call != "PPC_ENTER" for call in C_CALL.findall(without_comments)):
-            continue
-        if not DIRECT_WRITE.search(without_comments):
-            continue
-        # No references to unspecified thread, memory or host platform state.
-        if re.search(r"\bc->(?:thread|res_addr|res_val)\b", without_comments):
-            continue
-        # A candidate's source code is private and is never in the JSON.
-        yield {
-            "address": "0x" + match.group(1),
-            "file": path.name,
-            "instructions": len(marks),
-            "last_ppc_opcode": "4E800020",
-            "risk": "straight-line-register-only",
-            "_body": "void nsmbu_r24_private_function(Cpu* __restrict c) {"
-                     + body.rstrip() + "\n}\n",
-        }
+        yield classify_function(match.group(1), path.name, inner)
 
 
-def scan(generated, limit=10):
-    root, files = chunks(generated)
+def candidates_in_file(path):
+    for candidate, reason in classified_in_file(path):
+        if reason == "eligible":
+            yield candidate
+
+
+def scan(generated, limit=10, with_diagnostics=False):
+    _root, files = chunks(generated)
+    from collections import Counter
+    reasons = Counter()
     found = []
     for path in files:
-        for item in candidates_in_file(path):
-            found.append(item)
+        for candidate, reason in classified_in_file(path):
+            reasons[reason] += 1
+            if candidate is not None:
+                found.append(candidate)
     found.sort(key=lambda x: (x["instructions"], x["address"]))
+    if with_diagnostics:
+        return found[:limit], len(found), len(files), {
+            key: reasons[key] for key in REASONS
+        }
     return found[:limit], len(found), len(files)
 
 
@@ -135,25 +196,37 @@ def private_out(path):
 
 
 def scan_command(args):
-    entries, total, file_count = scan(args.generated, args.limit)
+    entries, total, file_count, reasons = scan(
+        args.generated, args.limit, with_diagnostics=True)
     out = private_out(args.out)
-    public_metadata = [{k: v for k, v in entry.items() if not k.startswith("_")}
-                       for entry in entries]
+    metadata = [{k: v for k, v in entry.items() if not k.startswith("_")}
+                for entry in entries]
     report = {
-        "schema": "nsmbu-xbox-r24-leaf-candidates-v1",
+        "schema": "nsmbu-xbox-r24-leaf-candidates-v2",
         "number_of_scanned_chunks": file_count,
+        "functions_examined": sum(reasons.values()),
         "strict_candidates": total,
-        "shortlist": public_metadata,
+        "reasons": reasons,
+        "shortlist": metadata,
         "real_game_code_executed_on_xbox": False,
     }
-    (out / "candidates.json").write_text(json.dumps(report, indent=2) + "\n")
-    print("R2.4 local scan: %d strict leaf candidates across %d chunks" % (total, file_count))
-    for item in public_metadata:
-        print("%s  %d PPC instructions  %s" %
-              (item["address"], item["instructions"], item["file"]))
+    (out / "candidates.json").write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8")
+    print("R2.4 local scan: %d conservative leaf candidates across %d chunks"
+          % (total, file_count))
+    print("Functions examined: %d" % report["functions_examined"])
+    print("Rejection funnel (one reason per function):")
+    for reason, count in reasons.items():
+        print("  %-38s %7d" % (reason, count))
+    for item in metadata:
+        print("%s  %d PPC instructions  %s (tail ignored: %d)" %
+              (item["address"], item["instructions"], item["file"],
+               item["ignored_after_unconditional_return"]))
     print("Metadata: " + str(out / "candidates.json"))
     if not entries:
-        raise ValueError("no strict leaf found; do NOT execute an unverified fallback")
+        print("No automatically eligible leaf found. Diagnostics are saved;"
+              " DO NOT execute an unverified fallback.")
 
 
 def extract_command(args):
