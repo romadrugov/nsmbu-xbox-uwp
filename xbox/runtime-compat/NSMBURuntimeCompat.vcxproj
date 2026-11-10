@@ -41,6 +41,7 @@
   <ItemGroup>
     <!-- Stage R1: test actual upstream source against UWP, not a handwritten mock. -->
     <ClCompile Include="..\..\runtime\src\core\env.cpp" />
+    <ClCompile Include="..\..\runtime\src\hle\coreinit_mem.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
