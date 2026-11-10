@@ -393,3 +393,44 @@ Artifact: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42839372128/
 * Detailed install and log collection: xbox/runtime-compat/README-R23-XBOX.md
 * A green result is not a real-game boot, NSMBU entrypoint execution,
   rendering of GX2 graphics, or any overall completion percentage.
+
+
+## R2.3 PHYSICAL Xbox Series S result (2026-11-10) — PASS
+
+The user installed the separately signed 0.8.3.0 diagnostic on their
+physical Xbox Series S. A green frame was visible, and the LocalState
+nsmbu_r23_diag.txt contained:
+* [r23/0] PASS: WinRT activation and initial blue D3D12 frame
+* [r23/boot] PASS: fixed 4GiB reserve, single 64KiB commit
+* [r23/1] PASS: real generated PPC entry returned 42
+* [r23/2] PASS: production HLE dispatch
+* [r23/3] MEM_WRITE_WATCH reservation is available
+* [r23/3] PASS: committed/reserved guest-page guard
+* [r23/4] PASS: real Cafe OS heap create/alloc/free/destroy
+* [r23/5] PASS: watch-aware guest heap dirty-page detection
+* [r23] PASS ALL and [r23] FINAL PASS
+* [r23] final D3D12 result color presented
+
+This confirms genuine runtime HLE + authored synthetic PowerPC execution
+on actual hardware, and closes the R2.3 physical device validation gate.
+No real New Super Mario Bros. U function has been executed on the Xbox.
+
+## R2.4: first actual private game function — preparation
+
+Branch: xbox-r24-private-leaf-probe
+CI: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42845299500
+Local-only guide: xbox/runtime-compat/README-R24-PRIVATE.md
+
+* Added strict scanner of the existing PRIVATE 93-chunk USA_V0 recompilation,
+  with a separate isolated C generator and local host CPU reference.
+* Public CI covers scanner unit tests, the real public fixture generator,
+  native host function execution (42), and genuine production
+  dispatch::set/address lookup/ppc_dispatch wiring.
+* The public binding is **explicitly synthetic**. No genuine NSMBU
+  function, Nintendo-derived source or private COFF has been passed into
+  public CI. The private Mac scan has not yet been run through this agent.
+* Next gates: run the strict selector against the existing private Mac
+  workspace; validate the selected genuine function's CPU reference;
+  compile that single function for **Windows UWP x64 MSVC ABI** in a
+  LOCAL/PRIVATE environment; package it separately; verify its CPU
+  result on Series S. Only the final hardware check can close R2.4.
