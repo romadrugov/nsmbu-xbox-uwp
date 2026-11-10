@@ -71,7 +71,7 @@ jobs:
           Copy-Item $base.FullName 'xbox/runtime-compat/NSMBURuntimeCompat.lib' -Force
 
           $project = 'xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj'
-          & $msbuild $project '/t:Build' '/m' '/v:minimal' '/p:Configuration=Release' '/p:Platform=x64' "/p:WindowsTargetPlatformVersion=$sdk"
+          & $msbuild $project '/t:ClCompile;Link' '/m' '/v:minimal' '/p:Configuration=Release' '/p:Platform=x64' "/p:WindowsTargetPlatformVersion=$sdk"
           if ($LASTEXITCODE -ne 0) { throw 'UWP executable link failed' }
 
           $exe = Get-ChildItem 'xbox/runtime-compat' -Filter 'NSMBURuntimeLinkProbe.exe' -Recurse -File | Select-Object -First 1
