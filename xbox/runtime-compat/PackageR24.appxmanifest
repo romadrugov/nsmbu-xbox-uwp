@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Independent R2.3 deployable public-fixture probe. Does not replace stable 0.7.0. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  IgnorableNamespaces="uap mp">
+  <Identity Name="Romadrugov.NSMBUR24XboxProbe" Publisher="CN=NSMBUXbox"
+            Version="0.8.4.0" ProcessorArchitecture="x64" />
+  <mp:PhoneIdentity PhoneProductId="c779fb8c-6c07-4dd1-9d91-e108bd42b7fd"
+                    PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+  <Properties>
+    <DisplayName>NSMBU Xbox R2.4 Private Leaf Probe</DisplayName>
+    <PublisherDisplayName>NSMBU Xbox Project</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0"
+                        MaxVersionTested="10.0.22621.0" />
+    <PackageDependency Name="Microsoft.VCLibs.140.00" MinVersion="14.0.0.0"
+                       Publisher="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US" />
+  </Dependencies>
+  <Resources><Resource Language="en-us" /></Resources>
+  <Applications>
+    <Application Id="App" Executable="NSMBUR24XboxProbe.exe"
+                 EntryPoint="NSMBUR24XboxProbe.App">
+      <uap:VisualElements
+        DisplayName="NSMBU R2.4 Private Leaf Probe"
+        Description="Private one-function PPC diagnostic. Blue startup; green pass; red fail. See LocalState."
+        BackgroundColor="#183347"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+  <Capabilities />
+</Package>
