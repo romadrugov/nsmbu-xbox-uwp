@@ -154,8 +154,8 @@ private:
 
 public ref class App sealed : IFrameworkView {
 public:
-    virtual void Initialize(CoreApplicationView^ view) {
-        view->Activated +=
+    virtual void Initialize(CoreApplicationView^ applicationView) {
+        applicationView->Activated +=
             ref new Windows::Foundation::TypedEventHandler<
                 CoreApplicationView^,
                 Windows::ApplicationModel::Activation::IActivatedEventArgs^>(
