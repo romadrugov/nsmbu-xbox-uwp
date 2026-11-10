@@ -21,6 +21,14 @@ foreach ($name in @('r24_private_dispatch.cpp','r24_public_host_main.cpp')) {
     & $clang @cxx "/Fo$obj" (Join-Path $dir $name)
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $obj)) { throw "Compile failed: $name" }
 }
+$publicSelected = Join-Path $out 'r24_public_selected.obj'
+$selectedArgs = @('/nologo','/c','/O2','/MD','/clang:-std=c11',
+    "/I$(Join-Path $root 'runtime/include')", "/Fo$publicSelected",
+    (Join-Path $dir 'r24_public_selected.c'))
+& $clang @selectedArgs
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $publicSelected)) {
+    throw 'R24 synthetic selected leaf compilation failed'
+}
 $binding = Join-Path $out 'r24_public_only_binding.obj'
 $c = @('/nologo','/c','/O2','/MD','/clang:-std=c11',
     "/I$(Join-Path $root 'runtime/include')","/Fo$binding",
@@ -39,7 +47,7 @@ $libs = @(Get-ChildItem (Join-Path $vcpkgRoot 'installed/x64-uwp/lib') -Filter '
 if ($libs.Count -ne 1) { throw 'zlib not available from R2.1 prerequisite' }
 $objects = @('core.obj','hle.obj','write_watch.obj','hooks.obj',
              'code_000.obj','table.obj','r24_private_dispatch.obj',
-             'r24_public_host_main.obj','r24_public_only_binding.obj') |
+             'r24_public_host_main.obj','r24_public_selected.obj','r24_public_only_binding.obj') |
     ForEach-Object { Join-Path $out $_ }
 $exe = Join-Path $out 'r24_public_wiring_host.exe'
 & $clang /nologo @objects $onecore $libs[0].FullName "/Fe:$exe" '/link' '/SUBSYSTEM:CONSOLE'
