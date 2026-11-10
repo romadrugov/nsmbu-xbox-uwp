@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Isolated source-only UWP AppContainer link gate, not deployable or executed. -->
+<Project DefaultTargets="Build" ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{AD0E7316-8FE2-411B-99BB-2E44AB4D23B1}</ProjectGuid>
+    <RootNamespace>NSMBUR23XboxProbe</RootNamespace>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <ProjectName>NSMBUR23XboxProbe</ProjectName>
+    <MinimumVisualStudioVersion>17.0</MinimumVisualStudioVersion>
+    <ApplicationType>Windows Store</ApplicationType>
+    <ApplicationTypeRevision>10.0</ApplicationTypeRevision>
+    <AppContainerApplication>true</AppContainerApplication>
+    <WindowsTargetPlatformVersion>10.0.22621.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformMinVersion>10.0.17763.0</WindowsTargetPlatformMinVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <TargetName>NSMBUR23XboxProbe</TargetName>
+    <GenerateAppxPackageOnBuild>false</GenerateAppxPackageOnBuild>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <AppxBundle>Never</AppxBundle>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <CompileAsWinRT>true</CompileAsWinRT>
+      <SDLCheck>true</SDLCheck>
+      <AdditionalOptions>/std:c++17 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\runtime\src;$(ProjectDir)..\..\runtime\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <AdditionalOptions>/NODEFAULTLIB:vccorlib /NODEFAULTLIB:msvcrt %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>vccorlib.lib;msvcrt.lib;WindowsApp.lib;OneCore.lib;d3d12.lib;dxgi.lib;$(R2ZlibLib);$(ProjectDir)r2_uwp_generated\core.obj;$(ProjectDir)r2_uwp_generated\hle.obj;$(ProjectDir)r2_uwp_generated\uwp_watch.obj;$(ProjectDir)r2_uwp_generated\r23bridge.obj;$(ProjectDir)r2_uwp_generated\hooks.obj;$(ProjectDir)r2_uwp_generated\code_000.obj;$(ProjectDir)r2_uwp_generated\table.obj;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup><ClCompile Include="r23_xbox_main.cpp" /><ClCompile Include="..\..\runtime\src\core\xbox_guest_vm.cpp" /></ItemGroup>
+  <ItemGroup><AppxManifest Include="PackageR23.appxmanifest" /></ItemGroup>
+  <ItemGroup>
+    <Content Include="..\smoke\Assets\*.png">
+      <Link>Assets\%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>
