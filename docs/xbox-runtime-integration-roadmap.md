@@ -364,3 +364,32 @@ sparse GuestVm reservation. Explicitly test startup order, AppContainer
 activation, a bounded Cafe OS heap lifecycle, and safety/logging on the
 physical Xbox. Do not replace the signed known-good v0.7.0 smoke or
 upload private USA_V0 RPX/recompiled game objects to public CI.
+
+## R2.3: independent signed device probe — CI package PASS, hardware pending
+
+GitHub Actions: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42839372128
+Artifact: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42839372128/artifacts/13774598590
+
+* A separate app identity, Romadrugov.NSMBUR23XboxProbe, version
+  0.8.3.0, allows side-by-side deployment with stable Xbox 0.7.0.
+* Windows CI compiled the public recomp-generated code and original
+  core.cpp/coreinit_mem.cpp for UWP, plus GuestVm sparse reservation
+  and UWP write tracking. The actual C++/CX WinRT CoreApplication,
+  D3D12 presentation and real runtime bridge linked into a
+  101,888-byte x64 AppContainer GUI executable.
+* A complete signed AppX, public .cer and official x64 VCLibs
+  dependency were uploaded as an Actions artifact. AppX unpacking
+  verified the executable, AppxManifest, WinRT .winmd, resources.pri
+  and logo. Package SHA256:
+  611313C045126F8DE355A9BCB6B093AB2650FC41F4882178E274BE1F302A5DD5
+* R2.3 startup on the physical Xbox has NOT yet been observed. The
+  executable is not run by CI. Its runtime tests need a manual
+  Series S deployment and actual device diagnostics.
+* In-app test: fixed 4-GiB virtual address reservation, bounded
+  64-KiB sparse guest commit, public PPC function returns 42 using
+  production dispatch, real HLE registry resolves OSIsAddressRangeDCValid,
+  then production Cafe OS heap create/allocate/free/destroy and UWP
+  watch/VirtualQuery behavior. Green = all tests passed, red = failure.
+* Detailed install and log collection: xbox/runtime-compat/README-R23-XBOX.md
+* A green result is not a real-game boot, NSMBU entrypoint execution,
+  rendering of GX2 graphics, or any overall completion percentage.
