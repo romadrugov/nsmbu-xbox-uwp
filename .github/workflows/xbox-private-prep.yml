@@ -5,7 +5,9 @@ on:
     branches: [xbox-uwp]
     paths:
       - "tools/xbox/private_gamecode.py"
+      - "tools/xbox/private_compile_one.py"
       - "tools/xbox/test_private_gamecode.py"
+      - "tools/xbox/test_private_compile_one.py"
       - "recomp/android_fixture.py"
       - ".github/workflows/xbox-private-prep.yml"
   workflow_dispatch:
@@ -23,7 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m unittest discover -s tools/xbox -p 'test_private_gamecode.py' -v
+          python3 -m unittest discover -s tools/xbox -p 'test_private_*.py' -v
       - name: Run real recompiler on PUBLIC three-instruction PowerPC fixture
         shell: bash
         run: |
@@ -46,3 +48,30 @@ jobs:
           assert not m["game_code_executed_on_xbox"], m
           print("Public synthetic recomp inventory PASSED; no Nintendo code used")
           PY
+
+
+  public-fixture-windows-coff:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile ONLY public synthetic PowerPC recompiler output to Windows x64 COFF
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "nsmbu-synthetic-coff"
+          py -3 recomp/android_fixture.py --output $root
+          if ($LASTEXITCODE -ne 0) { throw "Public RPX generation failed" }
+          $generated = Join-Path $root "gen"
+          $out = Join-Path $env:RUNNER_TEMP "nsmbu-synthetic-object"
+          py -3 tools/xbox/private_compile_one.py compile --public-fixture --generated $generated --out $out
+          if ($LASTEXITCODE -ne 0) { throw "Public Windows AMD64 COFF probe failed" }
+          $report = Get-Content (Join-Path $out "compile-summary.json") -Raw | ConvertFrom-Json
+          if ($report.coff_machine -ne "0x8664" -or
+              $report.build -ne "PUBLIC_FIXTURE" -or
+              $report.native_xbox_linked -or
+              $report.game_code_executed_on_xbox) {
+            throw "Unverified COFF probe report"
+          }
+          Write-Host "PUBLIC fixture -> clang-cl -> AMD64 COFF PASSED (not linked to Xbox)"
+          # Deliberately NO upload-artifact: objects and compiler logs remain local to runner.
