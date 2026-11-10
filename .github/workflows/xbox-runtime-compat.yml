@@ -1,0 +1,43 @@
+name: NSMBU Xbox - Upstream Runtime UWP Compile Gate
+
+on:
+  push:
+    branches: [xbox-uwp]
+    paths:
+      - "xbox/runtime-compat/**"
+      - "runtime/src/core/env.cpp"
+      - "runtime/src/core/env.h"
+      - ".github/workflows/xbox-runtime-compat.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upstream-uwp-staticlib:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile real upstream core/env.cpp under Windows Store x64
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
+          if (-not $vs) { throw 'Visual Studio missing' }
+          $msbuild = Join-Path $vs 'MSBuild/Current/Bin/MSBuild.exe'
+          $sdkRoot = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Windows Kits/10'
+          $versions = @(Get-ChildItem (Join-Path $sdkRoot 'Include') -Directory |
+            Where-Object { $_.Name -match '^10\.0\.\d+\.0$' } |
+            Sort-Object { [version]$_.Name } -Descending)
+          if ($versions.Count -eq 0) { throw 'Windows SDK missing' }
+          $sdk = $versions[0].Name
+          $project = 'xbox/runtime-compat/NSMBURuntimeCompat.vcxproj'
+          & $msbuild $project '/t:Build' '/m' '/v:minimal' '/p:Configuration=Release' '/p:Platform=x64' "/p:WindowsTargetPlatformVersion=$sdk"
+          if ($LASTEXITCODE -ne 0) { throw "Upstream UWP compile failed: $LASTEXITCODE" }
+          $lib = Get-ChildItem 'xbox/runtime-compat' -Filter 'NSMBURuntimeCompat.lib' -Recurse -File | Select-Object -First 1
+          if (-not $lib) { throw 'Compile-only runtime library not produced' }
+          Write-Host "R1 compile-only PASS: real upstream core/env.cpp -> Windows Store x64 static library ($($lib.Length) bytes)"
+          Write-Host 'NOT a game binary; NOT linked to UWP executable; NO Nintendo data.'
+          # No upload-artifact: this is a public source compatibility check.
