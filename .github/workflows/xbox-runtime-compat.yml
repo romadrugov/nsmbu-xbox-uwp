@@ -7,6 +7,8 @@ on:
       - "xbox/runtime-compat/**"
       - "runtime/src/core/env.cpp"
       - "runtime/src/core/env.h"
+      - "runtime/src/hle/coreinit_mem.cpp"
+      - "runtime/include/ppc.h"
       - ".github/workflows/xbox-runtime-compat.yml"
   workflow_dispatch:
 
@@ -40,4 +42,25 @@ jobs:
           if (-not $lib) { throw 'Compile-only runtime library not produced' }
           Write-Host "R1 compile-only PASS: real upstream core/env.cpp -> Windows Store x64 static library ($($lib.Length) bytes)"
           Write-Host 'NOT a game binary; NOT linked to UWP executable; NO Nintendo data.'
+
+      - name: Compile actual upstream Cafe OS memory HLE with standalone clang-cl
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $clangOptions = @(
+            (Get-Command clang-cl.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
+            'C:\Program Files\LLVM\bin\clang-cl.exe'
+          )
+          $clang = $clangOptions | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $clang) { throw 'clang-cl missing for upstream PowerPC builtin syntax' }
+          $root = (Resolve-Path .).Path
+          $out = Join-Path $env:RUNNER_TEMP 'coreinit_mem_uwp_compat.obj'
+          $source = Join-Path $root 'runtime/src/hle/coreinit_mem.cpp'
+          & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++17 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/Fo$out" $source
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $out)) {
+            throw 'Upstream memory HLE source does not yet compile with clang-cl'
+          }
+          Write-Host "R1 clang-cl source compile PASS: coreinit_mem.cpp ($((Get-Item $out).Length) bytes)"
+          Write-Host 'Source-only check, no game or Xbox executable linked.'
+
           # No upload-artifact: this is a public source compatibility check.
