@@ -92,6 +92,17 @@ and measure what upstream code can be reused without patches.
 Only after a green source compile should we increase the source set
 towards core/core.cpp, threads.cpp and other HLE modules.
 
+## R1 first executed probe — CI results
+
+CI run: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42747423853
+
+* **PASS:** unchanged upstream \`runtime/src/core/env.cpp\` compiled by MSVC v143 under a Windows Store x64 static-library project. Only a project-local \`_CRT_SECURE_NO_WARNINGS\` flag was required (MSVC C4996). The original upstream file was NOT edited.
+* **PASS:** unchanged upstream \`runtime/src/hle/coreinit_mem.cpp\` compiled to a Windows x64 COFF object with standalone \`clang-cl\` using the Windows APP API-family define, without generated Nintendo game files. This tests real Cafe OS heap/HLE code syntax and basic Windows-header portability.
+* **Toolchain finding:** MSVC cannot parse several Clang attributes and builtins in \`ppc.h\`; MSBuild \`PlatformToolset=ClangCL\` is not installed on the default CI Windows Store image (MSB8020). Use standalone clang-cl for translated core/HLE sources, and MSVC v143 where WinRT project build tooling requires it.
+* **NOT tested:** link/activation of this new HLE module inside the Xbox UWP executable, full PowerPC runtime memory safety, system-call correctness, Xbox hardware use, or executable game code. The current smoke AppX remains unchanged.
+
+Next R1 increment: compile additional upstream HLE/FS/threads source modules under the same clang-cl path; investigate missing imports and UWP-forbidden desktop APIs before linking them into an isolated runtime library.
+
 ## Explicitly not claimed
 
 * 10–15% or any other overall completion estimate is not measured.
