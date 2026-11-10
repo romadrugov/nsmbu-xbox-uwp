@@ -40,11 +40,12 @@ if (-not (Test-Path $vcpkg)) { throw 'vcpkg not installed' }
 if ($LASTEXITCODE -ne 0) { throw 'zlib:x64-uwp install failed' }
 $zlibInclude = Join-Path $vcpkgRoot 'installed/x64-uwp/include'
 $zlibDir = Join-Path $vcpkgRoot 'installed/x64-uwp/lib'
-$zlibLibs = @(Get-ChildItem $zlibDir -Filter '*zlib*.lib' -File)
-Write-Host "zlib library candidates: $($zlibLibs.Name -join ', ')"
+$zlibLibs = @(Get-ChildItem $zlibDir -Filter '*.lib' -File)
+Write-Host ("Available x64-uwp libraries: " + (($zlibLibs | ForEach-Object { $_.Name }) -join ', '))
 if (-not (Test-Path (Join-Path $zlibInclude 'zlib.h')) -or $zlibLibs.Count -eq 0) {
     throw 'zlib:x64-uwp headers or library missing'
 }
+if ($zlibLibs.Count -ne 1) { throw 'Expected exactly one UWP zlib .lib; inspect available libraries above' }
 $zlibLib = $zlibLibs[0].FullName
 
 $common = @('/nologo','/c','/O1','/MD','/EHsc','/clang:-std=c++20',
