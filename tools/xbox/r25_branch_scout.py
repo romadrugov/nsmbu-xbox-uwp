@@ -87,12 +87,16 @@ def evaluate(addr, filename, source, min_instructions, max_instructions):
         return None, "external_or_backward_goto"
     if any(label not in labels for label in gotos):
         return None, "external_or_backward_goto"
-    # A backward target can loop; stage R2.5 first validates acyclic
-    # local branches only. No automatic execution is ever permitted.
-    branch_sources = [int(m.group(1), 16) for m in marks
-                      if int(m.group(2), 16) >> 26 in (16, 18)]
-    if branch_sources and any(labels[label] <= min(branch_sources)
-                              for label in gotos):
+    # Require every goto to carry its own generated PPC instruction
+    # annotation, then check *that exact branch's* source address.
+    # Comparing against just the first branch in the function would miss
+    # a later backward edge and accidentally classify loops as acyclic.
+    annotated = list(re.finditer(
+        r"\bgoto\s+(L_[0-9A-F]{8})\s*;[^\n]*?"
+        r"/\*\s*([0-9A-F]{8}):\s*([0-9A-F]{8})\s*\*/", inspected))
+    if len(annotated) != len(gotos):
+        return None, "external_or_backward_goto"
+    if any(labels[m.group(1)] <= int(m.group(2), 16) for m in annotated):
         return None, "external_or_backward_goto"
     if not RESULT.search(code):
         return None, "no_register_result"
