@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/xbox-r24-leaf.yml"
       - "tools/xbox/r24_leaf_select.py"
+      - "tools/xbox/r24_coff.py"
       - "xbox/runtime-compat/r24_*"
       - "tools/xbox/test_r24_leaf_select.py"
       - "tools/xbox/private_gamecode.py"
@@ -40,6 +41,9 @@ jobs:
             --out "$RUNNER_TEMP/r24-private-output"
           python3 tools/xbox/r24_leaf_select.py reference \
             --out "$RUNNER_TEMP/r24-private-output" --compiler clang
+          python3 tools/xbox/r24_coff.py \
+            --private "$RUNNER_TEMP/r24-private-output" --compiler clang
+          file "$RUNNER_TEMP/r24-private-output/"*.obj
           python3 - "$RUNNER_TEMP/r24-private-output/r24_reference_result.json" <<'PY'
           import json, sys
           data = json.load(open(sys.argv[1]))
