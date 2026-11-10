@@ -67,6 +67,7 @@ jobs:
           }
           Write-Host 'Verified: production core.obj defines HLE lookup and host registration.'
           $objs = @((Join-Path $out 'probe.obj'),(Join-Path $out 'core.obj'),(Join-Path $out 'coreinit_mem.obj'))
+          $PSNativeCommandUseErrorActionPreference = $false
           $linkOutput = & $clang /nologo @objs "/Fe:$(Join-Path $out 'r2_dispatch.exe')" 2>&1 | Out-String
           $exit = $LASTEXITCODE
           $linkOutput | Out-File (Join-Path $out 'link-diagnostic.txt') -Encoding utf8
@@ -87,4 +88,8 @@ jobs:
               $safe = $line.Replace('|','/')
               ('- ' + $safe) >> $env:GITHUB_STEP_SUMMARY
             }
+          }
+          # An unresolved linker result is the expected output of this inventory,
+          # never a successful integration claim. Avoid pwsh propagating LASTEXITCODE.
+          exit 0
           }
