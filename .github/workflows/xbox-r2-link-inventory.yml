@@ -1,0 +1,90 @@
+name: NSMBU Xbox - R2 production dispatcher link inventory
+
+on:
+  push:
+    branches: [xbox-r2-production-dispatch-probe]
+    paths:
+      - ".github/workflows/xbox-r2-link-inventory.yml"
+      - "xbox/runtime-compat/r2_real_dispatch_probe.cpp"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-dispatch-inventory:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile real production core and Cafe OS HLE; inventory link blockers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $clangOptions = @(
+            (Get-Command clang-cl.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
+            'C:\Program Files\LLVM\bin\clang-cl.exe'
+          )
+          $clang = $clangOptions | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $clang) { throw 'clang-cl missing' }
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -products '*' -property installationPath | Select-Object -First 1
+          if (-not $vs) { throw 'Visual Studio missing' }
+          $msvc = Get-ChildItem (Join-Path $vs 'VC/Tools/MSVC') -Directory |
+            Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          $dumpbin = Join-Path $msvc.FullName 'bin/Hostx64/x64/dumpbin.exe'
+          $root = (Resolve-Path .).Path
+          $out = Join-Path $env:RUNNER_TEMP 'r2-real-dispatch'
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT 'vcpkg.exe'
+          if (-not (Test-Path $vcpkg)) { $vcpkg = 'C:\vcpkg\vcpkg.exe' }
+          & $vcpkg install zlib:x64-uwp --disable-metrics
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot install UWP zlib development headers' }
+          $include = Join-Path (Split-Path $vcpkg) 'installed/x64-uwp/include'
+          $common = @('/nologo','/c','/O1','/MD','/EHsc','/clang:-std=c++20',
+            '/DWINAPI_FAMILY=WINAPI_FAMILY_APP','/DNSMBU_XBOX_UWP=1',
+            '/D_CRT_SECURE_NO_WARNINGS',
+            "/I$(Join-Path $root 'runtime/src')",
+            "/I$(Join-Path $root 'runtime/include')",
+            "/I$include")
+          $sources = @(
+            @('runtime/src/core/core.cpp','core.obj'),
+            @('runtime/src/hle/coreinit_mem.cpp','coreinit_mem.obj'),
+            @('xbox/runtime-compat/r2_real_dispatch_probe.cpp','probe.obj')
+          )
+          foreach ($entry in $sources) {
+            $src = Join-Path $root $entry[0]
+            $obj = Join-Path $out $entry[1]
+            & $clang @common "/Fo$obj" $src
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $obj)) { throw "Compile failed: $($entry[0])" }
+            Write-Host "COMPILED: $($entry[0])"
+          }
+          $core = Join-Path $out 'core.obj'
+          $symbols = & $dumpbin /symbols $core | Out-String
+          if ($LASTEXITCODE -ne 0) { throw 'dumpbin failed' }
+          if ($symbols -notmatch 'hle_find' -or $symbols -notmatch 'register_host') {
+            throw 'Expected production registry/dispatcher symbols absent from core.obj'
+          }
+          Write-Host 'Verified: production core.obj defines HLE lookup and host registration.'
+          $objs = @((Join-Path $out 'probe.obj'),(Join-Path $out 'core.obj'),(Join-Path $out 'coreinit_mem.obj'))
+          $linkOutput = & $clang /nologo @objs '/Fe:'+(Join-Path $out 'r2_dispatch.exe') 2>&1 | Out-String
+          $exit = $LASTEXITCODE
+          $linkOutput | Out-File (Join-Path $out 'link-diagnostic.txt') -Encoding utf8
+          Write-Host $linkOutput
+          if ($exit -eq 0) {
+            & (Join-Path $out 'r2_dispatch.exe')
+            if ($LASTEXITCODE -ne 0) { throw "Real HLE/dispatch executable behavior failed: $LASTEXITCODE" }
+            Write-Host 'R2 PRODUCTION DISPATCH HOST EXECUTION: PASS'
+            "## R2 link diagnostic\n\nProduction core/HLE linked and executed successfully on Windows desktop. Xbox UWP still unverified." >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            if ($linkOutput -notmatch 'LNK[0-9]+|undefined symbol|unresolved external') {
+              throw 'Link failed without identifiable linker diagnostics'
+            }
+            $errors = @($linkOutput -split "\r?\n" | Where-Object { $_ -match 'LNK[0-9]+|undefined symbol|unresolved external' })
+            Write-Host "R2 EXPECTED LINK DIAGNOSTIC: $($errors.Count) linker error lines; no claim of successful link."
+            "## R2 link diagnostic\n\nProduction core/HLE **compiled**, but standalone full link is **NOT YET COMPLETE**. $($errors.Count) diagnostic lines. This inventory does not prove runtime integration.\n\nFirst linker errors:" >> $env:GITHUB_STEP_SUMMARY
+            foreach ($line in ($errors | Select-Object -First 20)) {
+              $safe = $line.Replace('|','/')
+              "- \`$safe\`" >> $env:GITHUB_STEP_SUMMARY
+            }
+          }
