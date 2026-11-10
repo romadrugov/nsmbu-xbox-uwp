@@ -3,8 +3,8 @@
 // Never represent this as authentic NSMBU code.
 #include "ppc.h"
 
-extern void f_02000000(Cpu*);
-PpcFunc g_r24_private_function = f_02000000;
+extern void nsmbu_r24_private_function(Cpu*);
+PpcFunc g_r24_private_function = nsmbu_r24_private_function;
 const uint32_t g_r24_guest_address = 0x02001000u;
 const uint32_t g_r24_expected_r3 = 42u;
 const uint32_t g_r24_expected_r4 = 0x2468ACE0u;
