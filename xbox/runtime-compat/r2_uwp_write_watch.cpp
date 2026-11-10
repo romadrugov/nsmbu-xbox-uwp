@@ -134,9 +134,32 @@ bool page_span(uint32_t addr, uint32_t size, uint32_t& shift, uint32_t& first, u
     return true;
 }
 
-// No pages are protected with PAGE_READONLY, so every committed guest
-// page remains readable. This is not a claim of address validity.
-bool readable(uint32_t, uint32_t) { return true; }
+// Check that the sparse guest allocation has actually committed the range.
+// UWP has no vectored handler to recover from reads of an uncommitted page.
+bool readable(uint32_t addr, uint32_t size) {
+    if (!size) return true;
+    uint8_t* base = g_base.load(std::memory_order_acquire);
+    const uint64_t total = g_size.load(std::memory_order_acquire);
+    const uint64_t end = (uint64_t)addr + size;
+    if (!base || end > total || end <= addr) return false;
+    uintptr_t cursor = (uintptr_t)base + addr;
+    const uintptr_t limit = (uintptr_t)base + end;
+    while (cursor < limit) {
+        MEMORY_BASIC_INFORMATION info{};
+        if (!VirtualQuery((const void*)cursor, &info, sizeof(info))) return false;
+        if (info.State != MEM_COMMIT || (info.Protect & (PAGE_NOACCESS | PAGE_GUARD)))
+            return false;
+        const DWORD access = info.Protect & 0xffu;
+        if (access != PAGE_READONLY && access != PAGE_READWRITE &&
+            access != PAGE_WRITECOPY && access != PAGE_EXECUTE_READ &&
+            access != PAGE_EXECUTE_READWRITE && access != PAGE_EXECUTE_WRITECOPY)
+            return false;
+        const uintptr_t next = (uintptr_t)info.BaseAddress + info.RegionSize;
+        if (next <= cursor) return false;
+        cursor = next;
+    }
+    return true;
+}
 uint64_t write_seq() { return g_serial.load(std::memory_order_acquire); }
 void enable_hints() {}
 
