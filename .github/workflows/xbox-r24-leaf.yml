@@ -28,6 +28,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 recomp/android_fixture.py --output "$RUNNER_TEMP/r24-public-fixture"
+          # Synthetic fixture is publicly authored; safe to log its exact C for diagnosis.
+          sed -n '1,90p' "$RUNNER_TEMP/r24-public-fixture/gen/code_000.c"
           python3 tools/xbox/r24_leaf_select.py scan \
             --generated "$RUNNER_TEMP/r24-public-fixture/gen" \
             --out "$RUNNER_TEMP/r24-private-output"
