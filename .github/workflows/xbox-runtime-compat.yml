@@ -70,8 +70,11 @@ jobs:
           if (-not $base) { throw 'Upstream static library missing' }
           Copy-Item $base.FullName 'xbox/runtime-compat/NSMBURuntimeCompat.lib' -Force
 
+          & py -3 'xbox/smoke/make_assets.py'
+          if ($LASTEXITCODE -ne 0) { throw 'Public PNG asset generation failed' }
+
           $project = 'xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj'
-          & $msbuild $project '/t:ClCompile;Link' '/m' '/v:minimal' '/p:Configuration=Release' '/p:Platform=x64' "/p:WindowsTargetPlatformVersion=$sdk"
+          & $msbuild $project '/t:Build' '/m' '/v:minimal' '/p:Configuration=Release' '/p:Platform=x64' "/p:WindowsTargetPlatformVersion=$sdk" '/p:GenerateAppxPackageOnBuild=false' '/p:AppxPackageSigningEnabled=false'
           if ($LASTEXITCODE -ne 0) { throw 'UWP executable link failed' }
 
           $exe = Get-ChildItem 'xbox/runtime-compat' -Filter 'NSMBURuntimeLinkProbe.exe' -Recurse -File | Select-Object -First 1
