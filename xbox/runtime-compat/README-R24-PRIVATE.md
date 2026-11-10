@@ -24,14 +24,19 @@ It prints a shortlist of guest addresses, PPC instruction counts and C
 chunk names. Its candidates.json, outside checkout, contains only that
 metadata and no generated C body. Share only this metadata if necessary.
 
-Selection is intentionally strict: a short 2–24-instruction straight-line
-function ending in unconditional blr, writing r3, with no memory loads/stores,
-branches, imports, other-function calls, hooks or unimplemented instructions.
-It explicitly removes a **provably unreachable** generated fallthrough
-after the final unconditional blr from its isolated test source.
+The **v2 scanner** prints the complete, one-reason-per-function rejection
+funnel for all recognized functions. This diagnoses why the older overly
+strict scanner found zero candidates across the 93 private chunks.
+Selection still excludes guest memory, host side effects, imports,
+calls to unknown helpers, hooks and branches. The accepted prefix is
+1–96 instructions ending at the **first unconditionally reached PPC blr**
+and must write r3 or r4. It may omit generated instructions *after*
+that return only when the prefix has no branches into the omitted tail.
 
-If the shortlist is empty, stop and revise the conservative selector;
-do NOT pick an unchecked function.
+The scanner never executes or extracts anything by itself. If zero
+candidates survive, its diagnostic counts are still written and the
+scan exits successfully; stop and review those counts before changing
+the policy. Do NOT execute any rejected function as a fallback.
 
 ## 2. Create ONE private C object candidate and local CPU witness
 
