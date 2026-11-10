@@ -103,6 +103,46 @@ CI run: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42747423853
 
 Next R1 increment: compile additional upstream HLE/FS/threads source modules under the same clang-cl path; investigate missing imports and UWP-forbidden desktop APIs before linking them into an isolated runtime library.
 
+## R1 expanded runtime source and archive gate — passed
+
+CI run: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42749189463
+
+* **13 / 13 original runtime translation units compiled** to Windows AMD64
+  COFF (core/env.cpp with Windows Store MSVC v143; remaining units
+  with standalone clang-cl and APP API-family). Included:
+  - \`core/env.cpp\`, \`core/core.cpp\`, \`core/threads.cpp\`
+  - All **ten** upstream HLE modules: \`ax.cpp\`, \`coreinit_mem.cpp\`,
+    \`coreinit_misc.cpp\`, \`erreula.cpp\`, \`fs.cpp\`, \`padscore.cpp\`,
+    \`snd_user.cpp\`, \`swkbd.cpp\`, \`system_stubs.cpp\`, \`zlib_hle.cpp\`.
+* Standard MSVC \`lib.exe\` successfully combined these 13 objects/
+  archives into an **1,818,168-byte** public-source-only AMD64 static
+  archive. It contains **no game code or assets** and is not uploaded.
+* Needed source compiler mode **C++20** for upstream filesystem
+  \`starts_with\` and JSON \`contains\`; C++17 was too old.
+* Used \`vcpkg install zlib:x64-uwp\` for \`zlib.h\` in \`core.cpp\` and
+  \`zlib_hle.cpp\`. This only proves compile-time availability; final
+  UWP link must include a matching UWP zlib library.
+* Thread scheduler source needed an isolated Xbox guard around
+  \`TerminateThread\`, which is unavailable to the chosen UWP API
+  family. The guard **fails closed** with \`std::terminate()\` if reboot
+  cannot stop a non-cooperative thread within five seconds, rather
+  than freeing still-active thread memory. This is NOT the final
+  safe cooperative-reset implementation; keep it a tracked risk.
+* No actual game function, runtime initialization sequence or full
+  Xbox UWP link has been tested using these 13 modules. Some sources
+  may import functions disallowed in the Xbox environment even if
+  their compilation succeeds.
+
+### Next gate: R1 → R2 linkage boundary
+
+Build a **public synthetic UWP executable link test** against a small
+subset of the 13-module runtime archive to identify unresolved
+dependencies and forbidden UWP imports. Preserve the synthetic smoke
+AppX and stable v0.7.0. Separately test that a *private*
+clang-cl/Windows APP-family build of user-owned game functions can
+link to the chosen runtime ABI. Do not copy the 2.1-GB Zig
+Windows-GNU archive into public CI or treat it as proven MSVC ABI.
+
 ## Explicitly not claimed
 
 * 10–15% or any other overall completion estimate is not measured.
