@@ -45,6 +45,11 @@ int main() {
         VirtualFree(fixed, 0, MEM_RELEASE);
         return fail(4, "UWP tracker initialization");
     }
+    if (!wwatch::readable(kStart, (uint32_t)kCommit) ||
+        wwatch::readable(kStart + 0x20000u, 4096u)) {
+        VirtualFree(fixed, 0, MEM_RELEASE);
+        return fail(12, "VirtualQuery must distinguish committed from reserved pages");
+    }
     uint64_t checkpoint = wwatch::arm(kStart, (uint32_t)kCommit);
     if (wwatch::written_since(kStart, (uint32_t)kCommit, checkpoint)) {
         VirtualFree(fixed, 0, MEM_RELEASE);
