@@ -1,0 +1,30 @@
+name: NSMBU Xbox R2.5 - control-flow scout (public fixtures only)
+
+on:
+  push:
+    branches: [xbox-r25-controlflow-scout]
+    paths:
+      - '.github/workflows/xbox-r25-scout.yml'
+      - 'tools/xbox/r25_branch_scout.py'
+      - 'tools/xbox/test_r25_branch_scout.py'
+      - 'tools/xbox/r24_leaf_select.py'
+      - 'tools/xbox/private_gamecode.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scanner-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test read-only branch scout on authored synthetic code
+        run: python3 -m unittest discover -s tools/xbox -p test_r25_branch_scout.py -v
+      - name: Verify scanner CLI help, no private inputs or files
+        run: |
+          python3 tools/xbox/r25_branch_scout.py --help
+          test ! -e r25_selected.c
+          test ! -e r25_branch_scout.json
+          echo 'R2.5 public branch scout tests: PASS (not game execution)'
