@@ -41,7 +41,7 @@ class PrivateRecompTest(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 prep.save_summary(output, meta)
             (root / "imports.json").write_text('[{"slot": 100}]\n')
-            with self.assertRaisesRegex(ValueError, "disagrees"):
+            with self.assertRaisesRegex(ValueError, "differs"):
                 prep.inspect_generated(root)
             (root / "imports.json").write_text("[]\n")
             (root / "table.c").write_text("const unsigned g_recomp_func_count = 1;\n")
