@@ -64,7 +64,17 @@ $modules = @(
 $objects = @()
 foreach ($entry in $modules) {
     $obj = Join-Path $out $entry[1]
-    & $clang @common "/Fo$obj" (Join-Path $root $entry[0])
+    $compileFlags = $common
+    if ($entry[0] -eq 'runtime/src/core/write_watch.cpp') {
+        # True upstream VEH write-watch implementation on Windows desktop only.
+        # AddVectoredExceptionHandler is absent from WINAPI_FAMILY_APP.
+        # This is NOT proof of UWP compatibility; no stub is substituted.
+        $compileFlags = @($common | Where-Object {
+            $_ -ne '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' -and $_ -ne '/DNSMBU_XBOX_UWP=1'
+        })
+        Write-Host 'R2 note: original write_watch.cpp compiled for desktop host API (UWP VEH blocker remains)'
+    }
+    & $clang @compileFlags "/Fo$obj" (Join-Path $root $entry[0])
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $obj)) {
         throw "Upstream compilation failed: $($entry[0])"
     }
