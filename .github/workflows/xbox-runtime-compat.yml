@@ -228,3 +228,36 @@ jobs:
             Write-Host ($undefined | Select-Object -First 8)
           }
           Write-Host 'Counts are unresolved before full linking; they are not necessarily missing implementations.'
+
+
+      - name: Link real clang-cl Cafe OS HLE with UWP executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $clangOptions = @(
+            (Get-Command clang-cl.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
+            'C:\Program Files\LLVM\bin\clang-cl.exe'
+          )
+          $clang = $clangOptions | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $clang) { throw 'clang-cl compiler missing' }
+          $root = (Resolve-Path .).Path
+          $dir = Join-Path $root 'xbox/runtime-compat'
+          $hle = Join-Path $env:RUNNER_TEMP 'coreinit_mem_uwp_compat.obj'
+          if (-not (Test-Path $hle)) { throw 'Real upstream HLE object not compiled' }
+          Copy-Item $hle (Join-Path $dir 'coreinit_mem_uwp_compat.obj') -Force
+          $bridge = Join-Path $dir 'hle_link_probe.obj'
+          & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++17 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/Fo$bridge" (Join-Path $dir 'hle_link_probe.cpp')
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bridge)) { throw 'HLE ABI bridge compile failed' }
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
+          $msbuild = Join-Path $vs 'MSBuild/Current/Bin/MSBuild.exe'
+          $sdkRoot = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Windows Kits/10'
+          $sdk = (Get-ChildItem (Join-Path $sdkRoot 'Include') -Directory | Where-Object { $_.Name -match '^10\.0\.\d+\.0$' } | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1).Name
+          if (-not $sdk) { throw 'Windows SDK not found' }
+          $project = Join-Path $dir 'NSMBURuntimeHleLinkProbe.vcxproj'
+          & $msbuild $project '/t:Build' '/m' '/v:minimal' '/p:Configuration=Release' '/p:Platform=x64' "/p:WindowsTargetPlatformVersion=$sdk" '/p:GenerateAppxPackageOnBuild=false' '/p:AppxPackageSigningEnabled=false'
+          if ($LASTEXITCODE -ne 0) { throw 'Real HLE UWP executable link failed; inspect LNK errors above' }
+          $exe = Get-ChildItem $dir -Filter 'NSMBURuntimeHleLinkProbe.exe' -Recurse -File | Select-Object -First 1
+          if (-not $exe) { throw 'HLE UWP executable not produced' }
+          Write-Host "R2 real Cafe OS HLE UWP link PASS ($($exe.Length) bytes), clang-cl + MSVC"
+          Write-Host 'Link check ONLY: no Nintendo code, no Xbox execution or full runtime initialization.'
