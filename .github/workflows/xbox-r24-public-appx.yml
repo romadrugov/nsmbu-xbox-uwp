@@ -1,0 +1,35 @@
+name: NSMBU Xbox R2.4 - public synthetic AppX integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [xbox-r24-private-leaf-probe]
+    paths:
+      - '.github/workflows/xbox-r24-public-appx.yml'
+      - 'xbox/runtime-compat/r24_*'
+      - 'xbox/runtime-compat/NSMBUR24XboxProbe.vcxproj'
+      - 'xbox/runtime-compat/PackageR24.appxmanifest'
+      - 'xbox/runtime-compat/build-r24-xbox-appx.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-appx:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build R2.4 independent AppContainer with synthetic-only PPC binding
+        shell: pwsh
+        run: ./xbox/runtime-compat/build-r24-xbox-appx.ps1
+      - name: Upload public-only synthetic Xbox package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nsmbu-r24-PUBLIC-SYNTHETIC-NOT-GAME
+          path: |
+            xbox/runtime-compat/output-r24/NSMBUR24XboxProbe_0.8.4.0_x64.appx
+            xbox/runtime-compat/output-r24/NSMBUR24XboxProbe.cer
+            xbox/runtime-compat/output-r24/Microsoft.VCLibs.x64.14.00.appx
+          retention-days: 7
+          if-no-files-found: error
