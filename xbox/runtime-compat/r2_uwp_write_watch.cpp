@@ -13,6 +13,7 @@
 #endif
 
 #include "core/write_watch.h"
+#include "ppc.h"
 #include <windows.h>
 #include <atomic>
 #include <algorithm>
@@ -27,6 +28,7 @@ std::atomic<uint8_t*> g_base{nullptr};
 std::atomic<uint64_t> g_size{0};
 std::atomic<uint64_t> g_serial{1};
 std::atomic<uint64_t> g_hints{0};
+std::atomic<uint64_t> g_hint_events_since_stats{0};
 std::atomic<uint64_t> g_hint_bytes{0};
 
 size_t page_size() {
@@ -139,6 +141,7 @@ void enable_hints() {}
 
 void hint(uint32_t, uint32_t size) {
     g_hints.fetch_add(1, std::memory_order_acq_rel);
+    g_hint_events_since_stats.fetch_add(1, std::memory_order_relaxed);
     g_hint_bytes.fetch_add(size, std::memory_order_relaxed);
 }
 void host_write_begin(uint32_t addr, uint32_t size) { hint(addr, size); }
@@ -149,7 +152,8 @@ void take_stats(uint64_t& faults, uint64_t& protectedPages) {
     protectedPages = 0;
 }
 void take_hint_stats(uint64_t& calls, uint64_t& bytes) {
-    calls = g_hints.exchange(0, std::memory_order_acq_rel);
+    // Keep global conservative hint history sticky across statistics resets.
+    calls = g_hint_events_since_stats.exchange(0, std::memory_order_acq_rel);
     bytes = g_hint_bytes.exchange(0, std::memory_order_acq_rel);
 }
 uint64_t protect_failures() { return 0; }
