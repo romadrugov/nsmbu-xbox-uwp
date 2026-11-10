@@ -5,6 +5,15 @@
 #include <cstring>
 #include <string>
 
+// Public metadata-only WinRT marker: emitted to satisfy UWP build plumbing.
+// This does not make the probe an activatable, deployable Xbox application.
+namespace NSMBURuntimeLinkProbe {
+public ref class MetadataMarker sealed {
+public:
+    MetadataMarker() {}
+};
+}
+
 int main() {
     const char* literal = env::expand_path("no-expansion-needed");
     if (!literal || std::strcmp(literal, "no-expansion-needed") != 0)
