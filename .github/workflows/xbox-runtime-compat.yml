@@ -266,3 +266,41 @@ jobs:
           if (-not $exe) { throw 'HLE UWP executable not produced' }
           Write-Host "R2 real Cafe OS HLE UWP link PASS ($($exe.Length) bytes), clang-cl + MSVC"
           Write-Host 'Link check ONLY: no Nintendo code, no Xbox execution or full runtime initialization.'
+
+
+      - name: Execute public Cafe OS HLE heap roundtrip on Windows CI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
+          $msbuild = Join-Path $vs 'MSBuild/Current/Bin/MSBuild.exe'
+          $msvc = Get-ChildItem (Join-Path $vs 'VC/Tools/MSVC') -Directory | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          $dumpbin = Join-Path $msvc.FullName 'bin/Hostx64/x64/dumpbin.exe'
+          $dir = (Resolve-Path 'xbox/runtime-compat').Path
+
+          $uwp = Get-ChildItem $dir -Filter 'NSMBURuntimeHleLinkProbe.exe' -Recurse -File | Select-Object -First 1
+          if (-not $uwp) { throw 'UWP HLE link output missing' }
+          $headers = (& $dumpbin /headers $uwp.FullName | Out-String)
+          if ($LASTEXITCODE -ne 0 -or $headers -notmatch 'machine \(x64\)' -or $headers -notmatch 'App Container') {
+            throw 'Real HLE UWP output lacks x64/AppContainer PE flags'
+          }
+          $depends = (& $dumpbin /dependents $uwp.FullName | Out-String)
+          if ($LASTEXITCODE -ne 0) { throw 'Real HLE UWP dependency audit failed' }
+          if ($depends -match '(?im)^\s+(?:USER32|MSVCP140|VCRUNTIME140|KERNEL32)\.dll\s*$') {
+            throw 'Desktop-only dependency in UWP HLE link probe'
+          }
+          Write-Host 'PASS: real Cafe OS HLE UWP PE is x64 AppContainer with no obvious desktop CRT imports.'
+          Write-Host $depends
+
+          $sdkRoot = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Windows Kits/10'
+          $sdk = (Get-ChildItem (Join-Path $sdkRoot 'Include') -Directory | Where-Object { $_.Name -match '^10\.0\.\d+\.0$' } | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1).Name
+          if (-not $sdk) { throw 'Windows SDK missing for host test' }
+          $project = Join-Path $dir 'NSMBURuntimeHleHostTest.vcxproj'
+          & $msbuild $project '/t:Build' '/m' '/v:minimal' '/p:Configuration=Release' '/p:Platform=x64' "/p:WindowsTargetPlatformVersion=$sdk"
+          if ($LASTEXITCODE -ne 0) { throw 'Real HLE desktop behavioral test link failed' }
+          $exe = Get-ChildItem $dir -Filter 'NSMBURuntimeHleHostTest.exe' -Recurse -File | Select-Object -First 1
+          if (-not $exe) { throw 'Real HLE desktop test executable missing' }
+          & $exe.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Real Cafe OS heap HLE failed behavior test (code=$LASTEXITCODE)" }
+          Write-Host 'PASS: same upstream Cafe OS HLE object executed synthetic guest heap lifecycle on Windows.'
