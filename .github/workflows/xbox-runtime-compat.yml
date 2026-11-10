@@ -129,3 +129,29 @@ jobs:
           }
           Write-Host "All additional upstream sources compiled as x64 COFF objects."
 
+      - name: Archive real upstream runtime COFF objects with MSVC librarian
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
+          if (-not $vs) { throw 'Visual Studio missing' }
+          $msvc = Get-ChildItem (Join-Path $vs 'VC/Tools/MSVC') -Directory | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          if (-not $msvc) { throw 'MSVC tools missing' }
+          $libexe = Join-Path $msvc.FullName 'bin/Hostx64/x64/lib.exe'
+          if (-not (Test-Path $libexe)) { throw 'MSVC librarian missing' }
+          $envlib = Get-ChildItem 'xbox/runtime-compat' -Filter 'NSMBURuntimeCompat.lib' -Recurse -File | Select-Object -First 1
+          if (-not $envlib) { throw 'Base UWP environment library missing' }
+          $obj = @(Get-ChildItem $env:RUNNER_TEMP -Filter 'nsmbu_r1_*.obj' -File)
+          $heap = Join-Path $env:RUNNER_TEMP 'coreinit_mem_uwp_compat.obj'
+          if (-not (Test-Path $heap)) { throw 'Heap HLE object missing' }
+          if ($obj.Count -ne 11) { throw "Expected 11 additional upstream COFF objects, got $($obj.Count)" }
+          $all = @($envlib.FullName, $heap) + @($obj | ForEach-Object { $_.FullName })
+          $out = Join-Path $env:RUNNER_TEMP 'nsmbu_upstream_uwp_compat.lib'
+          & $libexe /nologo '/MACHINE:X64' "/OUT:$out" @all
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $out)) { throw 'MSVC archive of upstream sources failed' }
+          $bytes = (Get-Item $out).Length
+          if ($bytes -lt 100000) { throw "Unexpectedly small runtime archive: $bytes" }
+          Write-Host "R1 archive PASS: 13 upstream translation units, Windows AMD64 static library ($bytes bytes)."
+          Write-Host 'Object archive only: no UWP executable, no link resolution, no private game code.'
+          # Private Nintendo RPX/generated objects are never part of this public CI.
