@@ -180,6 +180,38 @@ Workflow run: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42751274
    its trace and controlled failure behavior before attempting game
    bootstrap and GPU integration.
 
+## R2 PE-import and unresolved-symbol audit — PASS
+
+CI run: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42751709510
+
+* The 27,136-byte source-only AppContainer x64 link probe is still
+  buildable. \`dumpbin /dependents\` showed the expected
+  \`vccorlib140_app.DLL\`, \`MSVCP140_APP.dll\`,
+  \`VCRUNTIME140_1_APP.dll\`, \`VCRUNTIME140_APP.dll\` plus Windows
+  API-set DLLs for CRT, COM, WinRT and synchronization. No
+  obvious \`USER32.dll\` or desktop-only \`VCRUNTIME140.dll\`
+  appeared in this small probe.
+* Pre-link COFF symbol audit of selected upstream objects:
+  - \`coreinit_mem_uwp_compat.obj\`: defined 160 / undefined 25
+  - \`nsmbu_r1_threads.obj\`: defined 538 / undefined 93
+  - \`nsmbu_r1_core.obj\`: defined 292 / undefined 92
+  - \`nsmbu_r1_fs.obj\`: defined 328 / undefined 70
+  These are counts of **symbol table entries per object**, NOT
+  unique unresolved dependencies across the archive.
+* This audit confirms there is more linking work to do:
+  HLE/threads/core still reference the C++ runtime, other
+  runtime modules, logging, memory and platform services.
+  Compilation/archiving alone is insufficient.
+* The import audit is for the **small env-based UWP probe only**.
+  It cannot establish that the final game/runtime will import
+  only permitted APIs, or that an Xbox device can activate it.
+
+Next: run a public synthetic HLE link test which *requires*
+one real \`coreinit_mem.cpp\` entry point, resolve its host support
+dependencies incrementally, and verify the resulting AppContainer
+PE import table. Then proceed to a fully private test with actual
+generated game functions after MSVC-compatible ABI compilation.
+
 ## Explicitly not claimed
 
 * 10–15% or any other overall completion estimate is not measured.
