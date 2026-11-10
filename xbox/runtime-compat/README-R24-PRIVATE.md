@@ -65,6 +65,35 @@ Its expected r3/r4/lr values must be compared to the Xbox result.
 
 **Reference execution on the Mac is NOT a physical Xbox test.**
 
+
+## Mac -> Windows x64 COFF without Windows SDK
+
+When Apple Clang is invoked with '--target=x86_64-pc-windows-msvc',
+it cannot find 'math.h' from the Windows target runtime. That is an
+expected missing cross-SDK header, NOT an RPX/PowerPC translation failure.
+
+For a **strict register-only leaf**, after 'extract' and 'reference',
+run this public tool FROM THE PROJECT CHECKOUT:
+
+    python3 tools/xbox/r24_coff.py \
+      --private "$HOME/NSMBU-Xbox-private/USA_V0/r24" --compiler clang
+
+It derives a minimal standalone Cpu declaration from the *real*
+runtime/include/ppc.h, asserts the production x64 ABI layout, and
+limits calls to PPC_ENTER. It uses clang -nostdinc -ffreestanding with
+an explicit MSVC x64 target. Neither private source nor Windows SDK is
+required in public CI, and the two resulting objects are written
+OUTSIDE the public repository:
+
+    ~/NSMBU-Xbox-private/USA_V0/r24/r24_selected.obj
+    ~/NSMBU-Xbox-private/USA_V0/r24/r24_private_binding.obj
+
+The generated shim and translated C copies stay under the PRIVATE
+'r24/r24_coff/' directory. These COFF objects still need to be linked
+against the genuine Windows UWP runtime and tested on the physical Xbox.
+They are NOT a signed package, and the freestanding shim must not be
+used for memory-accessing or helper-dependent PPC functions.
+
 ## 3. How the one-function integration will work
 
 The public common module xbox/runtime-compat/r24_private_dispatch.cpp
