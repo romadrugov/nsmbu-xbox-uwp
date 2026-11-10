@@ -53,6 +53,19 @@ class TestR25Scout(unittest.TestCase):
         self.assertIsNone(item)
         self.assertEqual(reason, "external_or_backward_goto")
 
+    def test_later_backward_edge_never_candidate(self):
+        # Edge from 0x02001020 back to label 0x02001018: the prior
+        # first-branch-only heuristic incorrectly admitted this.
+        backward = GOOD.replace(
+            "return; /* 02001020: 4E800020 */",
+            "goto L_02001018; /* 02001020: 4800FFF8 */\n"
+            "    return; /* 02001024: 4E800020 */")
+        item, reason = scout.evaluate(
+            "02001000", "code_000.c",
+            backward.split("{", 1)[1].rsplit("}", 1)[0], 8, 96)
+        self.assertIsNone(item)
+        self.assertEqual(reason, "external_or_backward_goto")
+
     def test_memory_never_candidate(self):
         item, reason = scout.evaluate("02001000", "code_000.c", BAD_MEMORY.split("{", 1)[1].rsplit("}", 1)[0], 8, 96)
         self.assertIsNone(item)
