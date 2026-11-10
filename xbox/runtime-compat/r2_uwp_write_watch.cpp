@@ -8,6 +8,7 @@
 // otherwise miss a write. Consequently, previously written pages can be
 // reported dirty again: correctness over efficiency until a generation-aware
 // tracker is integrated and device-tested. Never report clean on API failure.
+#include <winapifamily.h>
 #if !defined(WINAPI_FAMILY) || WINAPI_FAMILY != WINAPI_FAMILY_APP
 #error This implementation is intentionally for WINAPI_FAMILY_APP only
 #endif
