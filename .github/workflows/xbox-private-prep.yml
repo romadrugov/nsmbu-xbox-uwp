@@ -1,0 +1,48 @@
+name: Xbox Private Recomp Preparation Tool
+
+on:
+  push:
+    branches: [xbox-uwp]
+    paths:
+      - "tools/xbox/private_gamecode.py"
+      - "tools/xbox/test_private_gamecode.py"
+      - "recomp/android_fixture.py"
+      - ".github/workflows/xbox-private-prep.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-fixture-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit-test local-only metadata and repository privacy guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tools/xbox -p 'test_private_gamecode.py' -v
+      - name: Run real recompiler on PUBLIC three-instruction PowerPC fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 recomp/android_fixture.py --output "$RUNNER_TEMP/public-ppc"
+          python3 tools/xbox/private_gamecode.py inspect \
+            --generated "$RUNNER_TEMP/public-ppc/gen" \
+            --summary "$RUNNER_TEMP/public-summary.json"
+          python3 - "$RUNNER_TEMP/public-summary.json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              m = json.load(stream)
+          assert m["entry_point"] == "0x02000000", m
+          assert m["function_count"] == 1, m
+          assert m["import_count"] == 0, m
+          assert m["code_files"] >= 1, m
+          assert m["build"] == "UNVERIFIED", m
+          assert not m["build_verified_by_sha256"], m
+          assert not m["native_xbox_linked"], m
+          assert not m["game_code_executed_on_xbox"], m
+          print("Public synthetic recomp inventory PASSED; no Nintendo code used")
+          PY
