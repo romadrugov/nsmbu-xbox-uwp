@@ -46,5 +46,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup><ClCompile Include="link_probe.cpp" /></ItemGroup>
+  <ItemGroup><AppxManifest Include="Package.appxmanifest" /></ItemGroup>
+  <ItemGroup>
+    <Content Include="..\smoke\Assets\*.png">
+      <Link>Assets\%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
