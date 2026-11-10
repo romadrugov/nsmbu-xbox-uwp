@@ -31,4 +31,10 @@ struct Image {
 bool inspect(const uint8_t* bytes, size_t byte_count,
              Image& output, std::string& error);
 const Section* section_named(const Image& image, const char* name);
+
+// Decode exactly one previously inspected section, without modifying guest
+// memory. Handles Cafe OS big-endian-size-prefixed zlib or NOBITS zero fill.
+// Enforces a per-section limit of 32 MiB; leaves output unchanged on failure.
+bool decode_section(const uint8_t* file, size_t file_size, const Section& section,
+                    std::vector<uint8_t>& output, std::string& error);
 } // namespace xboxrpx
