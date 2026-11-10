@@ -1,0 +1,56 @@
+name: NSMBU Xbox R2.4 - private leaf selector public test
+
+on:
+  push:
+    branches: [xbox-r24-private-leaf-probe]
+    paths:
+      - ".github/workflows/xbox-r24-leaf.yml"
+      - "tools/xbox/r24_leaf_select.py"
+      - "tools/xbox/test_r24_leaf_select.py"
+      - "tools/xbox/private_gamecode.py"
+      - "runtime/include/ppc.h"
+      - "recomp/android_fixture.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-pure-leaf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit test strict extraction and local arithmetic CPU reference
+        run: python3 -m unittest discover -s tools/xbox -p 'test_r24_leaf_select.py' -v
+      - name: Run true recompiler on authored 3-instruction public fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 recomp/android_fixture.py --output "$RUNNER_TEMP/r24-public-fixture"
+          python3 tools/xbox/r24_leaf_select.py scan \
+            --generated "$RUNNER_TEMP/r24-public-fixture/gen" \
+            --out "$RUNNER_TEMP/r24-private-output"
+          python3 tools/xbox/r24_leaf_select.py extract \
+            --generated "$RUNNER_TEMP/r24-public-fixture/gen" \
+            --address 0x02000000 \
+            --out "$RUNNER_TEMP/r24-private-output"
+          python3 tools/xbox/r24_leaf_select.py reference \
+            --out "$RUNNER_TEMP/r24-private-output" --compiler clang
+          python3 - "$RUNNER_TEMP/r24-private-output/r24_reference_result.json" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1]))
+          assert data["r3"] == "0x0000002A", data
+          assert data["reference_executed_locally"] is True, data
+          assert data["game_code_executed_on_xbox"] is False, data
+          print("R2.4 PUBLIC FIXTURE LOCAL CPU REFERENCE: PASS (R3 = 42)")
+          PY
+      - name: Reject commits with private R2.4 extracted game output
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -E '(^|/)(r24_selected[.]c|r24_private_binding[.]c|r24_reference[.]c|r24_reference_result[.]json)$'; then
+            echo "Private game-derived file detected in public checkout" >&2
+            exit 1
+          fi
+          echo "R2.4 public source boundary: PASS"
