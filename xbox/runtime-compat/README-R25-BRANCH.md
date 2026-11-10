@@ -77,3 +77,35 @@ This branch is tooling-only. No physical R2.5 Xbox test has occurred.
 
 CI (public generated fixtures, no proprietary game code):
 https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42860806845
+
+
+## Actual USA_V0 private scan result (2026-11-10)
+
+The user ran the scan on Mac (93 chunks; 81,431 function entries).
+The read-only scout found **one review candidate**:
+- Address: 0x02AFC380
+- File: code_092.c
+- 27 PPC instructions
+- 2 conditional PPC branches, 2 local goto edges
+- Status: REVIEW ONLY — no execution yet.
+
+For the next local structural audit of this exact candidate:
+
+    cd "$HOME/NSMBU-Xbox-r24-tools"
+    git fetch origin xbox-r25-controlflow-scout
+    git switch --detach origin/xbox-r25-controlflow-scout
+    python3 tools/xbox/r25_control_audit.py \
+      --generated "$HOME/NSMBU-Xbox-private/USA_V0/generated" \
+      --address 0x02AFC380 \
+      --out "$HOME/NSMBU-Xbox-private/USA_V0/r25"
+
+The report r25_control_audit.json contains only address metadata, per-goto
+origin/target addresses and whether they match PPC conditional/unconditional
+relative-offset decoding, plus structural failure flags. It does not output
+C source/opcodes, compile or run the candidate. A status
+STRUCTURAL_AUDIT_PASS_REVIEW_REQUIRED does **not** authorize execution.
+All control-flow, return paths, initialization and input assumptions still
+require manual review before setting up a bounded multi-vector Mac test.
+
+CI (public synthetic instruction tests only):
+https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42867056407
