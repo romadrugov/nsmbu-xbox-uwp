@@ -65,3 +65,13 @@ code_*.c
 *.obj
 *.lib
 /NSMBU-Xbox-private/
+
+
+# R2.4 private leaf extraction/reference and private Windows binding are local only
+r24_selected.c
+r24_reference.c
+r24_private_binding.c
+r24_reference_host
+r24_reference_result.json
+r24_generated/
+r24-private/
