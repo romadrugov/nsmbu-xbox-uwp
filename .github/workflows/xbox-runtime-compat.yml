@@ -61,7 +61,7 @@ jobs:
           $root = (Resolve-Path .).Path
           $out = Join-Path $env:RUNNER_TEMP 'coreinit_mem_uwp_compat.obj'
           $source = Join-Path $root 'runtime/src/hle/coreinit_mem.cpp'
-          & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++17 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/I$env:NSMBU_UWP_ZLIB_INCLUDE" "/Fo$out" $source
+          & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++17 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/Fo$out" $source
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $out)) {
             throw 'Upstream memory HLE source does not yet compile with clang-cl'
           }
@@ -115,7 +115,7 @@ jobs:
             $stem = [IO.Path]::GetFileNameWithoutExtension($source)
             $out = Join-Path $env:RUNNER_TEMP "nsmbu_r1_$stem.obj"
             Write-Host "=== $relative ==="
-            & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++20 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' '/DNSMBU_XBOX_UWP=1' '/D_CRT_SECURE_NO_WARNINGS' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/Fo$out" $source
+            & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++20 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' '/DNSMBU_XBOX_UWP=1' '/D_CRT_SECURE_NO_WARNINGS' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/I$env:NSMBU_UWP_ZLIB_INCLUDE" "/Fo$out" $source
             if ($LASTEXITCODE -ne 0 -or -not (Test-Path $out)) {
               $failed += $relative
               Write-Host "FAIL: $relative"
