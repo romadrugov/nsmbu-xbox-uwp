@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/xbox-r25-scout.yml'
       - 'tools/xbox/r25_branch_scout.py'
+      - 'tools/xbox/r25_control_audit.py'
+      - 'tools/xbox/test_r25_control_audit.py'
       - 'tools/xbox/test_r25_branch_scout.py'
       - 'tools/xbox/r24_leaf_select.py'
       - 'tools/xbox/private_gamecode.py'
@@ -21,10 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Test read-only branch scout on authored synthetic code
-        run: python3 -m unittest discover -s tools/xbox -p test_r25_branch_scout.py -v
+        run: |
+          python3 -m unittest discover -s tools/xbox -p 'test_r25_branch_scout.py' -v
+          python3 -m unittest discover -s tools/xbox -p 'test_r25_control_audit.py' -v
       - name: Verify scanner CLI help, no private inputs or files
         run: |
           python3 tools/xbox/r25_branch_scout.py --help
+          python3 tools/xbox/r25_control_audit.py --help
           test ! -e r25_selected.c
           test ! -e r25_branch_scout.json
           echo 'R2.5 public branch scout tests: PASS (not game execution)'
