@@ -67,7 +67,7 @@ jobs:
           }
           Write-Host 'Verified: production core.obj defines HLE lookup and host registration.'
           $objs = @((Join-Path $out 'probe.obj'),(Join-Path $out 'core.obj'),(Join-Path $out 'coreinit_mem.obj'))
-          $linkOutput = & $clang /nologo @objs '/Fe:'+(Join-Path $out 'r2_dispatch.exe') 2>&1 | Out-String
+          $linkOutput = & $clang /nologo @objs "/Fe:$(Join-Path $out 'r2_dispatch.exe')" 2>&1 | Out-String
           $exit = $LASTEXITCODE
           $linkOutput | Out-File (Join-Path $out 'link-diagnostic.txt') -Encoding utf8
           Write-Host $linkOutput
@@ -85,6 +85,6 @@ jobs:
             "## R2 link diagnostic\n\nProduction core/HLE **compiled**, but standalone full link is **NOT YET COMPLETE**. $($errors.Count) diagnostic lines. This inventory does not prove runtime integration.\n\nFirst linker errors:" >> $env:GITHUB_STEP_SUMMARY
             foreach ($line in ($errors | Select-Object -First 20)) {
               $safe = $line.Replace('|','/')
-              "- \`$safe\`" >> $env:GITHUB_STEP_SUMMARY
+              ('- ' + $safe) >> $env:GITHUB_STEP_SUMMARY
             }
           }
