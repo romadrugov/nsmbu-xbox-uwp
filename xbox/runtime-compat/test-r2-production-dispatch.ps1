@@ -46,7 +46,8 @@ Write-Host "UWP zlib library candidates: $($zlibCandidates.Name -join ', ')"
 if (-not (Test-Path (Join-Path $zlibInclude 'zlib.h')) -or $zlibCandidates.Count -eq 0) {
     throw 'UWP zlib headers/library missing'
 }
-$zlibLib = ($zlibCandidates | Where-Object { $_.Name -match '^zlib(?:static)?\\.lib
+$zlibLib = ($zlibCandidates | Select-Object -First 1).FullName
+if (-not (Test-Path $zlibLib)) { throw 'No UWP zlib static archive chosen' }
 
 # Original upstream modules; no test-only HLE registry or dispatcher shims.
 $cxxOptions = @('/nologo','/c','/O1','/MD','/EHsc','/clang:-std=c++20',
