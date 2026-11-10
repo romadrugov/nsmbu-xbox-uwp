@@ -41,6 +41,7 @@ CONTROL_FLOW = re.compile(
 )
 MEMORY_OR_IMPORT = re.compile(
     r"\b(?:ld8|ld16|ld32|ld64|st8|st16|st32|st64|"
+    r"ldf32|ldf64|stf32|stf64|"
     r"ppc_ptr|ppc_dispatch|ppc_unimplemented|ppc_trap|"
     r"ppc_lwarx|ppc_stwcx|ppc_dcbz|psq_load\w*|psq_store\w*|"
     r"memcpy|memset|memmove|malloc|calloc|free|realloc|"
