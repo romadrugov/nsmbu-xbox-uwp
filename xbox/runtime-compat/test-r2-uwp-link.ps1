@@ -82,4 +82,23 @@ if ($deps -match '(?im)^\s+(?:USER32|MSVCP140|VCRUNTIME140)\.dll\s*$') { throw '
 Write-Host "R2.2 PASS: Windows Store AppContainer x64 GUI PE ($($exe.Length) bytes)"
 Write-Host $deps
 Write-Host 'Build/link only; no UWP activation, packaging, Xbox execution or private code.'
-"R2.2 AppContainer x64 UWP **LINK PASS**, public recompilation and real core/HLE; UWP GetWriteWatch adapter. PE import audit passed. No Xbox activation." >> $env:GITHUB_STEP_SUMMARY
+
+# Compile the same UWP API-family write-watch object with a desktop process.
+# This proves the code observes guest memory writes, not console activation.
+$watchTest = Join-Path $env:RUNNER_TEMP 'r2_uwp_watch_host.exe'
+$onecore = Join-Path $sdkRoot "Lib/$($sdk.Name)/um/x64/OneCore.lib"
+$watchArgs = @('/nologo','/MD','/EHsc','/clang:-std=c++20',
+    '/DWINAPI_FAMILY=WINAPI_FAMILY_APP',
+    "/I$(Join-Path $root 'runtime/src')",
+    "/I$(Join-Path $root 'runtime/include')",
+    (Join-Path $dir 'r2_uwp_watch_host_test.cpp'),
+    (Join-Path $build 'uwp_watch.obj'),$onecore,
+    "/Fe:$watchTest",'/link','/SUBSYSTEM:CONSOLE')
+& $clang @watchArgs
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $watchTest)) {
+    throw 'R2.2 APP-family GetWriteWatch Windows host test link failed'
+}
+& $watchTest
+if ($LASTEXITCODE -ne 0) { throw "R2.2 APP-family watch behavior FAILED: $LASTEXITCODE" }
+Write-Host 'R2.2 WATCH BEHAVIOR PASS: sparse guest writes detected via GetWriteWatch.'
+"R2.2 AppContainer UWP **LINK PASS** with real core/HLE/public guest. PE import audit passed. Same APP-family GetWriteWatch module **EXECUTED AND PASSED** on Windows desktop. No Xbox activation." >> $env:GITHUB_STEP_SUMMARY
