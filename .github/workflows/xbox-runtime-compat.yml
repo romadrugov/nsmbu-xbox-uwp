@@ -241,6 +241,12 @@ jobs:
           $clang = $clangOptions | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
           if (-not $clang) { throw 'clang-cl compiler missing' }
           $root = (Resolve-Path .).Path
+          # Generate only our author-created three-instruction PPC fixture.
+          # Generated files remain ephemeral or gitignored; no game data.
+          & (Join-Path $root 'xbox/smoke/build-ppc-fixture.ps1')
+          if (-not (Test-Path (Join-Path $root 'xbox/smoke/generated/guest_fixture.lib'))) {
+            throw 'Public synthetic PPC fixture static archive missing'
+          }
           $dir = Join-Path $root 'xbox/runtime-compat'
           $hle = Join-Path $env:RUNNER_TEMP 'coreinit_mem_uwp_compat.obj'
           if (-not (Test-Path $hle)) { throw 'Real upstream HLE object not compiled' }
@@ -252,6 +258,14 @@ jobs:
           $hostShim = Join-Path $dir 'hle_link_host.obj'
           & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++17 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/Fo$hostShim" (Join-Path $dir 'hle_link_host.cpp')
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $hostShim)) { throw 'Isolated HLE host adapter compile failed' }
+
+          $guestBridge = Join-Path $dir 'guest_hle_bridge.obj'
+          & $clang /nologo /c /O1 /MD /EHsc /clang:-std=c++17 '/DWINAPI_FAMILY=WINAPI_FAMILY_APP' "/I$(Join-Path $root 'runtime/src')" "/I$(Join-Path $root 'runtime/include')" "/Fo$guestBridge" (Join-Path $dir 'guest_hle_bridge.cpp')
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $guestBridge)) {
+            throw 'Public recompiled guest-to-Cafe-OS-HLE bridge failed to compile'
+          }
+          Write-Host "Public synthetic PPC -> real HLE bridge COFF ready ($((Get-Item $guestBridge).Length) bytes)"
+
 
           $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
           $vs = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
@@ -265,6 +279,7 @@ jobs:
           $exe = Get-ChildItem $dir -Filter 'NSMBURuntimeHleLinkProbe.exe' -Recurse -File | Select-Object -First 1
           if (-not $exe) { throw 'HLE UWP executable not produced' }
           Write-Host "R2 real Cafe OS HLE UWP link PASS ($($exe.Length) bytes), clang-cl + MSVC"
+          Write-Host 'UWP executable now links public three-instruction recompiled PPC + genuine Cafe OS heap HLE.'
           Write-Host 'Link check ONLY: no Nintendo code, no Xbox execution or full runtime initialization.'
 
 
@@ -303,4 +318,5 @@ jobs:
           if (-not $exe) { throw 'Real HLE desktop test executable missing' }
           & $exe.FullName
           if ($LASTEXITCODE -ne 0) { throw "Real Cafe OS heap HLE failed behavior test (code=$LASTEXITCODE)" }
+          Write-Host 'PASS: public native PPC function -> guest dispatch -> real Cafe OS heap HLE host slots also executed.'
           Write-Host 'PASS: same upstream Cafe OS HLE object executed synthetic guest heap lifecycle on Windows.'
