@@ -5,6 +5,7 @@ on:
     branches: [xbox-uwp]
     paths:
       - "tools/xbox/try_private_game_link.ps1"
+      - "tools/xbox/private_compile_all.py"
       - "xbox/runtime-compat/private_game_table_probe.c"
       - "xbox/runtime-compat/link_probe.cpp"
       - "xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj"
@@ -38,3 +39,19 @@ jobs:
           if (-not $exe) { throw 'Public UWP EXE missing' }
           Write-Host "PASS: public recompiled PPC function table linked in UWP AppContainer x64: $($exe.Length) bytes"
           Write-Host 'No Nintendo game RPX/code, artifacts, or runtime execution in this CI.'
+      - name: Verify the full clang-cl/MSVC archive script on public PPC fixture ONLY
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $generated = Join-Path $env:RUNNER_TEMP 'nsmbu-xbox-public-ppc-fixture/gen'
+          $output = Join-Path $env:RUNNER_TEMP 'nsmbu-public-full-coff'
+          py -3 tools/xbox/private_compile_all.py --public-fixture --generated $generated --out $output
+          if ($LASTEXITCODE -ne 0) { throw 'Public C-to-MSVC COFF archive script failed' }
+          $data = Get-Content (Join-Path $output 'compile-summary.json') -Raw | ConvertFrom-Json
+          if ($data.mode -ne 'PUBLIC_FIXTURE' -or
+              $data.chunks -ne 1 -or
+              $data.archive_bytes -lt 100 -or
+              $data.game_code_executed -or
+              $data.playable) { throw 'Public full-archive metadata invalid' }
+          Write-Host 'PASS: identical private clang-cl/MSVC archive script works with public synthetic PPC code.'
+
