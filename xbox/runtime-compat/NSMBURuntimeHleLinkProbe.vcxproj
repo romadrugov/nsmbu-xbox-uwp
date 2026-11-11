@@ -44,7 +44,7 @@
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <!-- C++/CX UWP requires vccorlib before the static C++ CRT. -->
       <AdditionalOptions>/NODEFAULTLIB:vccorlib /NODEFAULTLIB:msvcrt %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>vccorlib.lib;msvcrt.lib;$(ProjectDir)NSMBURuntimeCompat.lib;$(ProjectDir)coreinit_mem_uwp_compat.obj;$(ProjectDir)hle_link_probe.obj;$(ProjectDir)hle_link_host.obj;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vccorlib.lib;msvcrt.lib;$(ProjectDir)NSMBURuntimeCompat.lib;$(ProjectDir)coreinit_mem_uwp_compat.obj;$(ProjectDir)hle_link_probe.obj;$(ProjectDir)hle_link_host.obj;$(ProjectDir)guest_hle_bridge.obj;$(ProjectDir)..\smoke\generated\guest_fixture.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup><ClCompile Include="hle_probe_main.cpp" /></ItemGroup>
