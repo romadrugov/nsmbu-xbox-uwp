@@ -131,6 +131,8 @@ file(GLOB RUNTIME_SOURCES CONFIGURE_DEPENDS runtime/src/*.cpp runtime/src/*.c ru
                                             runtime/src/save/*.cpp runtime/src/test/*.cpp runtime/src/text/*.cpp)
 list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "nsmbu_guest_stubs\\.c$")
 list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "mod_lua_test_stubs\\.cpp$")
+# This is a synthetic PPC-only test dispatcher. Production already defines ppc_dispatch in core.cpp.
+list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "headless_dispatch\\.c$")
 list(APPEND RUNTIME_SOURCES runtime/src/platform/perf_hint.cpp runtime/src/platform/touch_pad.cpp runtime/src/gfx/render_prof.cpp runtime/src/gfx/screenshot.cpp)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(NSMBU_GUEST_STUBS ${CMAKE_BINARY_DIR}/generated/nsmbu_guest_stubs.c)
