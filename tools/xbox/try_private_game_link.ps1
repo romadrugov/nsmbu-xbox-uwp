@@ -77,7 +77,16 @@ $compat = Join-Path $root 'xbox/runtime-compat/NSMBURuntimeCompat.vcxproj'
 & $msbuild $compat @common "/p:OutDir=$compatOut/" "/p:IntDir=$compatInt/" *> (Join-Path $dest 'compat.log')
 if ($LASTEXITCODE -ne 0) { throw 'UWP runtime compatibility compile failed; read only LOCAL compat.log' }
 $compatLib = Join-Path $compatOut 'NSMBURuntimeCompat.lib'
-if (-not (Test-Path $compatLib)) { throw 'Runtime compat library missing' }
+if (-not (Test-Path $compatLib)) {
+  $matches = @(Get-ChildItem $dest,(Join-Path $root 'xbox/runtime-compat') -Recurse -File -Filter 'NSMBURuntimeCompat.lib' -ErrorAction SilentlyContinue)
+  if ($matches.Count -gt 0) { $compatLib = $matches[0].FullName }
+}
+if (-not (Test-Path $compatLib)) {
+  Write-Host 'UWP compatibility MSBuild log (last 35 lines):'
+  Get-Content (Join-Path $dest 'compat.log') -Tail 35 | ForEach-Object { Write-Host $_ }
+  throw 'Runtime compat library not found despite successful MSBuild exit'
+}
+Write-Host "UWP compatibility library: $compatLib"
 & py -3 (Join-Path $root 'xbox/smoke/make_assets.py')
 if ($LASTEXITCODE -ne 0) { throw 'Public logo generation failed' }
 $project = Join-Path $root 'xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj'
