@@ -25,6 +25,7 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
     <TargetName>NSMBURuntimeLinkProbe</TargetName>
+    <NSMBUCompatArchive Condition="'$(NSMBUCompatArchive)' == ''">$(ProjectDir)NSMBURuntimeCompat.lib</NSMBUCompatArchive>
     <GenerateAppxPackageOnBuild>false</GenerateAppxPackageOnBuild>
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <AppxBundle>Never</AppxBundle>
@@ -43,8 +44,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
-      <AdditionalDependencies Condition="'$(NSMBUPrivateArchive)' == ''">$(ProjectDir)NSMBURuntimeCompat.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalDependencies Condition="'$(NSMBUPrivateArchive)' != ''">$(NSMBUPrivateBridgeObj);$(NSMBUPrivateArchive);$(ProjectDir)NSMBURuntimeCompat.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(NSMBUPrivateArchive)' == ''">$(NSMBUCompatArchive);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(NSMBUPrivateArchive)' != ''">$(NSMBUPrivateBridgeObj);$(NSMBUPrivateArchive);$(NSMBUCompatArchive);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup><ClCompile Include="link_probe.cpp" /></ItemGroup>
