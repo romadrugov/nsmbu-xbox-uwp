@@ -273,6 +273,53 @@ https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/42804892979
 * Xbox device execution of Cafe OS heap and any real game function
   remains **unverified**.
 
+## R2: public recomputed guest -> Cafe OS HLE end-to-end link + desktop execution — PASS
+
+CI run: https://github.com/romadrugov/nsmbu-xbox-uwp/actions/runs/43054420514
+Commit: \`5966d13d1c8b6916fbfcb2477c6a6f1da49212ee\`
+
+* Re-ran the **author-created three-instruction PowerPC fixture** through
+  the existing Python recompilation pipeline on Windows. Its generated
+  \`code_000.c\`, \`table.c\`, the public headless dispatcher and public
+  fixture bridge compiled via \`clang-cl\` into a **four-object** library.
+  This generated code is **NOT** NSMBU game code.
+* New \`xbox/runtime-compat/guest_hle_bridge.cpp\` invokes the generated
+  game-free PPC function via \`g_recomp_entry_point\` and
+  \`ppc_dispatch\`, tests its result **42**, then registers genuine
+  \`imp_coreinit_OSIsAddressRangeDCValid\` and
+  \`imp_coreinit_MEMGetBaseHeapHandle\` through the public headless
+  dispatch host table and executes them via \`ppc_dispatch\`.
+* The genuine upstream \`coreinit_mem.cpp\` and the author-created
+  guest-recomp fixture **linked together** into a **45,568-byte**
+  Windows Store x64 AppContainer EXE via \`clang-cl\` and MSVC.
+  The UWP PE imported no obvious desktop-only MSVC CRT modules.
+  The binary was **not activated on Xbox**.
+* Windows desktop host execution **PASSED** with the same genuine
+  upstream HLE and the same guest / HLE bridge. It mapped 64 KiB
+  of public synthetic guest memory at
+  \`PPC_MEM_BASE + 0x10010000\`, created an ExpHeap via
+  \`headless_dispatch_register_host\` / \`ppc_dispatch\`, verified
+  the big-endian heap header, allocated 256 bytes aligned to
+  32 bytes, freed the block, checked total free size, destroyed
+  the heap and verified HLE registration.
+* The test **does not use production** \`dispatch::register_host\`,
+  logging, write-watch or actual game table; the public
+  \`headless_dispatch.c\` and aborting test shims are deliberate
+  substitutes for this narrow ABI experiment.
+* Existing v0.7.0 physical Xbox smoke and private code archive are
+  untouched. The public CI contains **no Nintendo RPX or game objects**.
+
+### Next R2 gate
+
+Replace the isolated test host and headless registry incrementally
+with **real** upstream \`core/core.cpp\` dispatch, logging, and
+write-watch support, or add the test to an isolated Xbox UWP AppX
+for real device activation and guest HLE smoke. Avoid linking
+the entire private game before the public production-runtime
+activation and ABI boundary have been checked on Xbox. Separately
+prepare a **private** clang-cl game-code compiler, keeping game
+objects out of GitHub.
+
 ## Explicitly not claimed
 
 * 10–15% or any other overall completion estimate is not measured.
