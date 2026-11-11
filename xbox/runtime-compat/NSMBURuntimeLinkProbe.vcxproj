@@ -45,7 +45,9 @@
       <SubSystem>Windows</SubSystem>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <AdditionalDependencies Condition="'$(NSMBUPrivateArchive)' == ''">$(NSMBUCompatArchive);%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalDependencies Condition="'$(NSMBUPrivateArchive)' != ''">$(NSMBUPrivateBridgeObj);$(NSMBUPrivateArchive);$(NSMBUCompatArchive);%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- UWP C++/CX requires the WinRT CRT to precede msvcrt when linking clang-cl PPC objects. -->
+      <AdditionalOptions Condition="'$(NSMBUPrivateArchive)' != ''">/NODEFAULTLIB:vccorlib /NODEFAULTLIB:msvcrt %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies Condition="'$(NSMBUPrivateArchive)' != ''">vccorlib.lib;msvcrt.lib;$(NSMBUPrivateBridgeObj);$(NSMBUPrivateArchive);$(NSMBUCompatArchive);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup><ClCompile Include="link_probe.cpp" /></ItemGroup>
