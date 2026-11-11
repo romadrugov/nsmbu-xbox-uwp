@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile ALL private NSMBU generated C to Windows/MSVC-ABI COFF and .lib.
+r"""Compile ALL private NSMBU generated C to Windows/MSVC-ABI COFF and .lib.
 
 This MUST run on a PRIVATE Windows x64 machine with clang-cl and lib.exe.
 It NEVER uploads source/objects/logs. Use a fresh --out OUTSIDE checkout.
