@@ -60,7 +60,7 @@ def compile_all(args):
     libexe = shutil.which("lib")
     if not clang or not libexe:
         raise ValueError("open x64 VS Developer PowerShell with clang-cl and lib.exe on PATH")
-    out.mkdir(parents=True, exist_ok=False)
+    out.mkdir(parents=True, exist_ok=True)
     objs = out / "objects"
     logs = out / "logs"
     objs.mkdir()
@@ -76,7 +76,11 @@ def compile_all(args):
             status = subprocess.run(cmd, stdout=fd, stderr=subprocess.STDOUT, check=False)
         if status.returncode != 0:
             raise RuntimeError(f"clang-cl stopped at {src.name}; inspect PRIVATE logs/{src.stem}.log")
-        if not target.is_file() or target.read_bytes()[:2] != b"\x64\x86":
+        if not target.is_file():
+            raise RuntimeError(f"compiler output missing for {src.name}")
+        with target.open("rb") as stream:
+            machine = stream.read(2)
+        if machine != b"\x64\x86":
             raise RuntimeError(f"expected Windows AMD64 COFF from {src.name}")
         built.append(target)
         print(f"[{i}/{len(sources)}] {src.name}: AMD64 COFF PASS", flush=True)
