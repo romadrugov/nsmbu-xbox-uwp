@@ -57,9 +57,28 @@ def compile_all(args):
     elif not args.public_fixture:
         raise ValueError("private generated imports.c missing")
     clang = shutil.which("clang-cl")
-    libexe = shutil.which("lib")
+    libexe = shutil.which("lib.exe") or shutil.which("lib")
+    if not libexe:
+        # GitHub's Windows runners install MSVC but do not always put lib.exe
+        # on PATH. VS Developer PowerShell already exposes it; otherwise
+        # resolve the actual installed toolset without guessing its version.
+        program_files_x86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+        vswhere = Path(program_files_x86) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+        if vswhere.is_file():
+            result = subprocess.run(
+                [str(vswhere), "-latest", "-products", "*", "-property", "installationPath"],
+                capture_output=True, text=True, check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                vc_tools = Path(result.stdout.strip()) / "VC" / "Tools" / "MSVC"
+                if vc_tools.is_dir():
+                    for version in sorted(vc_tools.iterdir(), reverse=True):
+                        candidate = version / "bin" / "Hostx64" / "x64" / "lib.exe"
+                        if candidate.is_file():
+                            libexe = str(candidate)
+                            break
     if not clang or not libexe:
-        raise ValueError("open x64 VS Developer PowerShell with clang-cl and lib.exe on PATH")
+        raise ValueError("requires clang-cl and MSVC x64 lib.exe (VS2022 C++ tools)")
     out.mkdir(parents=True, exist_ok=True)
     objs = out / "objects"
     logs = out / "logs"
