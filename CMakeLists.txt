@@ -133,6 +133,9 @@ list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "nsmbu_guest_stubs\\.c$")
 list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "mod_lua_test_stubs\\.cpp$")
 # This is a synthetic PPC-only test dispatcher. Production already defines ppc_dispatch in core.cpp.
 list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "headless_dispatch\\.c$")
+# Xbox UWP-only guest VM and RPX smoke modules are explicitly built by Xbox MSBuild.
+# Do not glob them into the normal desktop, Linux or Android CMake runtime.
+list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "/(xbox_guest_vm|rpx_inspect|rpx_stage)\\.cpp$")
 list(APPEND RUNTIME_SOURCES runtime/src/platform/perf_hint.cpp runtime/src/platform/touch_pad.cpp runtime/src/gfx/render_prof.cpp runtime/src/gfx/screenshot.cpp)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(NSMBU_GUEST_STUBS ${CMAKE_BINARY_DIR}/generated/nsmbu_guest_stubs.c)
