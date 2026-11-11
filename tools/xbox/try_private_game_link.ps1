@@ -20,7 +20,12 @@ function InCheckout([string]$path) {
 }
 if (InCheckout $dest) { throw 'OutputDir must be OUTSIDE public GitHub checkout' }
 if (-not $PublicFixture -and $env:GITHUB_ACTIONS -eq 'true') {
-  throw 'Private game code on public GitHub Actions is forbidden. Use private Windows machine.'
+  # Never accept private game inputs in public CI. The explicit owner-private
+  # workflow must check repository visibility before setting this opt-in.
+  if ($env:GITHUB_REPOSITORY -ne 'romadrugov/mkwii-xbox-build' -or
+      $env:NSMBU_PRIVATE_CI_OPT_IN -ne 'YES') {
+    throw 'Private game code is forbidden outside explicitly opted-in private CI.'
+  }
 }
 if (Test-Path $dest) {
   if (Get-ChildItem $dest -Force | Select-Object -First 1) { throw 'OutputDir must be empty/new to prevent stale private builds' }
