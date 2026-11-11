@@ -14,6 +14,12 @@ public:
 };
 }
 
+#ifdef NSMBU_PRIVATE_GAME_LINK
+// Author-created bridge compiled by clang-cl. This checks a privately
+// supplied recomp table but NEVER executes a Nintendo game function.
+extern "C" int nsmbu_private_game_link_metadata();
+#endif
+
 int main() {
     const char* literal = env::expand_path("no-expansion-needed");
     if (!literal || std::strcmp(literal, "no-expansion-needed") != 0)
@@ -24,5 +30,8 @@ int main() {
     // runtime in the UWP probe: MSVC must only resolve its link symbol.
     auto* volatile unlink_test = &env::unset;
     (void)unlink_test;
+#ifdef NSMBU_PRIVATE_GAME_LINK
+    if (nsmbu_private_game_link_metadata() != 0) return 30;
+#endif
     return 0;
 }
