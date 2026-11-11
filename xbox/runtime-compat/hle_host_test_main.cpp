@@ -7,12 +7,19 @@
 
 extern "C" int nsmbu_runtime_hle_link_probe();
 extern "C" int nsmbu_runtime_hle_heap_roundtrip(uint32_t guest_start);
+extern "C" int nsmbu_public_guest_hle_link_probe();
+extern "C" int nsmbu_public_guest_hle_heap_roundtrip(uint32_t guest_start);
 
 int main() {
     int rc = nsmbu_runtime_hle_link_probe();
     if (rc != 0) {
         std::printf("HLE basic/registry FAIL: %d\n", rc);
         return rc;
+    }
+    rc = nsmbu_public_guest_hle_link_probe();
+    if (rc != 0) {
+        std::printf("Synthetic PPC -> real Cafe OS HLE dispatch FAIL: %d\n", rc);
+        return 30 + rc;
     }
     constexpr uintptr_t kGuestBase = 0x200000000000ull;
     constexpr uint32_t kGuestStart = 0x10010000u;
@@ -24,11 +31,12 @@ int main() {
         return 20;
     }
     rc = nsmbu_runtime_hle_heap_roundtrip(kGuestStart);
+    if (rc == 0) rc = nsmbu_public_guest_hle_heap_roundtrip(kGuestStart);
     if (!VirtualFree(region, 0, MEM_RELEASE)) return 21;
     if (rc != 0) {
         std::printf("Cafe OS heap HLE FAIL: %d\n", rc);
         return rc;
     }
-    std::puts("PASS: real upstream Cafe OS HLE registration, heap create/alloc/free, guest endian header, and MSVC/Clang ABI");
+    std::puts("PASS: real upstream Cafe OS HLE heap, synthetic PPC guest dispatch, HLE host slot, endianness, and MSVC/Clang ABI");
     return 0;
 }
