@@ -29,7 +29,14 @@ def compile_all(args):
     if os.name != "nt":
         raise ValueError("Windows x64 with VS developer tools is required; cannot use macOS clang-cl")
     if os.getenv("GITHUB_ACTIONS") == "true" and not args.public_fixture:
-        raise ValueError("refusing private game code on GitHub Actions")
+        # No game-derived input is permitted in public CI. Allow a deliberately
+        # opted-in, owner-controlled PRIVATE build repo only.
+        trusted_private_ci = (
+            os.getenv("GITHUB_REPOSITORY") == "romadrugov/mkwii-xbox-build"
+            and os.getenv("NSMBU_PRIVATE_CI_OPT_IN") == "YES"
+        )
+        if not trusted_private_ci:
+            raise ValueError("private game code forbidden outside explicitly opted-in private CI")
     gen = Path(args.generated).expanduser().resolve()
     out = Path(args.out).expanduser().resolve()
     if inside_repo(gen) and not args.public_fixture:
