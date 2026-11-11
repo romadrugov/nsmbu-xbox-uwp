@@ -32,7 +32,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>$(ProjectDir)coreinit_mem_uwp_compat.obj;$(ProjectDir)hle_link_probe.obj;$(ProjectDir)hle_link_host.obj;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(ProjectDir)coreinit_mem_uwp_compat.obj;$(ProjectDir)hle_link_probe.obj;$(ProjectDir)hle_link_host.obj;$(ProjectDir)guest_hle_bridge.obj;$(ProjectDir)..\smoke\generated\guest_fixture.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup><ClCompile Include="hle_host_test_main.cpp" /></ItemGroup>
