@@ -1,0 +1,40 @@
+name: Xbox private-first-link tooling (PUBLIC fixture only)
+
+on:
+  push:
+    branches: [xbox-uwp]
+    paths:
+      - "tools/xbox/try_private_game_link.ps1"
+      - "xbox/runtime-compat/private_game_table_probe.c"
+      - "xbox/runtime-compat/link_probe.cpp"
+      - "xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj"
+      - ".github/workflows/xbox-first-real-link-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-abi-preflight:
+    runs-on: windows-2022
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise identical UWP link path with authored three-instruction PPC fixture
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:RUNNER_TEMP 'nsmbu-public-first-link'
+          & '.\tools\xbox\try_private_game_link.ps1' -PublicFixture -OutputDir $out
+          if ($LASTEXITCODE -ne 0) { throw 'Public synthetic archive did not pass the private-first-link pipeline' }
+          $data = Get-Content (Join-Path $out 'link-summary.json') -Raw | ConvertFrom-Json
+          if (-not $data.linked_uwp_x64_executable -or
+              $data.input -ne 'PUBLIC_SYNTHETIC_PPC' -or
+              $data.game_code_executed -or
+              $data.playable) {
+            throw 'Link metadata verification failed'
+          }
+          $exe = Get-ChildItem (Join-Path $out 'app') -Filter 'NSMBURuntimeLinkProbe.exe' -Recurse -File | Select-Object -First 1
+          if (-not $exe) { throw 'Public UWP EXE missing' }
+          Write-Host "PASS: public recompiled PPC function table linked in UWP AppContainer x64: $($exe.Length) bytes"
+          Write-Host 'No Nintendo game RPX/code, artifacts, or runtime execution in this CI.'
