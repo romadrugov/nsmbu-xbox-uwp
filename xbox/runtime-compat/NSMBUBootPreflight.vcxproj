@@ -26,6 +26,11 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
+    <!-- Only an explicit private workflow opt-in enables real game-code calls.
+         The default public UWP build retains R5F behavior unchanged. -->
+    <NSMBUR6ADefine Condition="'$(NSMBUR6AOptIn)'=='true'">NSMBU_R6A_EXECUTE_LEAF=1;</NSMBUR6ADefine>
+  </PropertyGroup>
+  <PropertyGroup>
     <TargetName>NSMBUBootPreflight</TargetName>
     <GenerateAppxPackageOnBuild>false</GenerateAppxPackageOnBuild>
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
@@ -38,7 +43,7 @@
       <CompileAsWinRT>true</CompileAsWinRT>
       <SDLCheck>true</SDLCheck>
       <AdditionalOptions>/std:c++17 %(AdditionalOptions)</AdditionalOptions>
-      <PreprocessorDefinitions>NSMBU_R5_CPU_BOOTSTRAP=1;NSMBU_R5C_LINK_AUDIT=1;NSMBU_R5D_RELOC_AUDIT=1;NSMBU_R5E_BOOT_PARITY=1;NSMBU_R5F_VISUAL_PREVIEW=1;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(NSMBUR6ADefine)NSMBU_R5_CPU_BOOTSTRAP=1;NSMBU_R5C_LINK_AUDIT=1;NSMBU_R5D_RELOC_AUDIT=1;NSMBU_R5E_BOOT_PARITY=1;NSMBU_R5F_VISUAL_PREVIEW=1;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\runtime\src;$(ProjectDir)..\..\runtime\include;$(ProjectDir)..\smoke;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>

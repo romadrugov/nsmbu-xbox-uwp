@@ -104,7 +104,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $out = Join-Path $env:RUNNER_TEMP 'nsmbu-public-first-link'
-          & '.\tools\xbox\try_private_game_link.ps1' -PublicFixture -OutputDir $out -BuildBootShell
+          & '.\tools\xbox\try_private_game_link.ps1' -PublicFixture -OutputDir $out -BuildBootShell -EnableR6Leaf
           if ($LASTEXITCODE -ne 0) { throw 'Public synthetic archive did not pass the private-first-link pipeline' }
           $data = Get-Content (Join-Path $out 'link-summary.json') -Raw | ConvertFrom-Json
           if (-not $data.linked_uwp_x64_executable -or
