@@ -92,6 +92,26 @@ int main() {
     image.sections[3].memory_bytes = 60u;
     if (!audit()) return 5;
 
-    std::puts("R5D synthetic ELF RELA, import and SDA-window audit PASSED");
+    // Regression: the owner's real USA_V0 RPX exceeded our former 512,000
+    // relocation cap. A crafted >600K-record uncompressed RELA section
+    // stays below decode_section's 32 MiB per-section safety limit.
+    constexpr size_t kLargeRelaRecords = 600001u;
+    constexpr size_t kRelaOffset = 48u;
+    const size_t largeBytes = kLargeRelaRecords * 12u;
+    file.resize(kRelaOffset + largeBytes, 0u);
+    image.sections[3].file_bytes = uint32_t(largeBytes);
+    image.sections[3].memory_bytes = uint32_t(largeBytes);
+    // Record 0 remains valid; the new records are crafted all-zero metadata.
+    if (!audit() || r.records != kLargeRelaRecords ||
+        r.type_counts[0] != kLargeRelaRecords - 5u ||
+        r.rela_sections != 1u || !error.empty()) return 6;
+
+    // A fictitious over-budget decoded section is refused without even
+    // decompressing/allocating it; caller's last good report is retained.
+    image.sections[3].memory_bytes = 96u * 1024u * 1024u + 12u;
+    if (audit() || r.records != kLargeRelaRecords ||
+        error.find("96 MiB") == std::string::npos) return 7;
+
+    std::puts("R5D synthetic ELF RELA, >512K records, budget and SDA-window audit PASSED");
     return 0;
 }
