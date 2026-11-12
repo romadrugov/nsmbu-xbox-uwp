@@ -8,6 +8,8 @@ on:
       - "tools/xbox/private_compile_all.py"
       - "xbox/runtime-compat/private_game_table_probe.c"
       - "xbox/runtime-compat/link_probe.cpp"
+      - "xbox/runtime-compat/bootfirst_runtime.c"
+      - "runtime/src/core/headless_dispatch.c"
       - "xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj"
       - ".github/workflows/xbox-first-real-link-preflight.yml"
   pull_request:
@@ -17,6 +19,8 @@ on:
       - "tools/xbox/private_compile_all.py"
       - "xbox/runtime-compat/private_game_table_probe.c"
       - "xbox/runtime-compat/link_probe.cpp"
+      - "xbox/runtime-compat/bootfirst_runtime.c"
+      - "runtime/src/core/headless_dispatch.c"
       - "xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj"
       - ".github/workflows/xbox-first-real-link-preflight.yml"
   workflow_dispatch:
