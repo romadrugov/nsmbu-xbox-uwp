@@ -100,6 +100,16 @@ void RunPreflight() {
         Log("R4 STOP: native entrypoint mapping unavailable");
     } else {
         Log("R4 PREFLIGHT PASS: guest VM + entire native function table + entrypoint mapping");
+        NSMBUR5ImportAudit audit = {};
+        const int auditResult = nsmbu_r5_audit_imports(&audit);
+        sprintf_s(line, "R5C import audit: status=%d total=%u function=%u fn-pointers=%u "
+                  "dispatch-mapped=%u data=%u data-virtual-slots=%u first-data=%08X",
+                  auditResult, audit.total, audit.function_imports,
+                  audit.function_pointers, audit.function_dispatch_entries,
+                  audit.data_imports, audit.data_virtual_slots, audit.first_data_addr);
+        Log(line);
+        Log("R5C WARNING: native import pointers include generated WEAK "
+            "hle_unimplemented wrappers; mapped does NOT mean Cafe OS implemented");
     }
     if (result == 0 && table.entry_registered) {
         Log("R5B PHASE: stage verified RPX, then prepare native Cpu and guest stack; no entry call");
