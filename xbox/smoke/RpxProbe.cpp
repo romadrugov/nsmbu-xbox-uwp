@@ -417,6 +417,50 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                                     }
                                     log("[rpx/R5D] RELOCATIONS NOT APPLIED. Imported .text immediates "
                                         "were considered by recomp/recomp.py; do not reapply blindly.");
+#if defined(NSMBU_R6A_EXECUTE_LEAF)
+                                    // The user has explicitly opted into exactly one
+                                    // pure native game leaf. Both section contents
+                                    // and recompilation match the known USA_V0 SHA.
+                                    // No entrypoint, imports or Cafe OS may run.
+                                    if (reloc.invalid_symbols == 0 &&
+                                        reloc.target_outside_section == 0 &&
+                                        reloc.rela_sections == 3) {
+                                        const xboxrpx::PreparedSection* gameText = nullptr;
+                                        for (const auto& loaded : sections) {
+                                            if (loaded.name == ".text") {
+                                                gameText = &loaded;
+                                                break;
+                                            }
+                                        }
+                                        if (gameText && gameText->bytes.size() <= UINT32_MAX) {
+                                            NSMBUR6LeafReport leaf{};
+                                            const int leafResult = nsmbu_r6_run_pure_leaf(
+                                                gameText->bytes.data(), gameText->address,
+                                                static_cast<uint32_t>(gameText->bytes.size()), &leaf);
+                                            if (leafResult == 0) {
+                                                sprintf_s(detail,
+                                                    "[rpx/R6A] REAL GAME LEAF EXECUTED: addr=%08X pattern=%u "
+                                                    "r3=%08X expected=%08X stack-preserved=%u",
+                                                    leaf.candidate, leaf.pattern, leaf.actual_r3,
+                                                    leaf.expected_r3, leaf.stack_preserved);
+                                                log(detail);
+                                            } else if (leafResult == 1) {
+                                                log("[rpx/R6A] NO vetted leaf in USA_V0 table; game execution not attempted");
+                                            } else {
+                                                sprintf_s(detail,
+                                                    "[rpx/R6A] LEAF EXECUTION FAILED: status=%d candidate=%08X "
+                                                    "r3=%08X expected=%08X stack=%u",
+                                                    leafResult, leaf.candidate, leaf.actual_r3,
+                                                    leaf.expected_r3, leaf.stack_preserved);
+                                                log(detail);
+                                            }
+                                        } else {
+                                            log("[rpx/R6A] SKIP: no small staged .text section");
+                                        }
+                                    } else {
+                                        log("[rpx/R6A] SKIP: relocation metadata did not pass integrity gate");
+                                    }
+#endif
                                 }
 #endif
                                 log("[rpx/R5B] EXECUTION STILL DISABLED: imports, relocations and Cafe OS not initialized");
