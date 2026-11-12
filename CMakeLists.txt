@@ -722,6 +722,12 @@ add_executable(r5d_relocation_audit_test runtime/test/r5d_relocation_audit_test.
 target_include_directories(r5d_relocation_audit_test PRIVATE runtime/src)
 add_test(NAME r5d_relocation_audit COMMAND r5d_relocation_audit_test)
 
+add_executable(r5e_stage_test runtime/test/rpx_stage_test.cpp
+    runtime/src/core/rpx_stage.cpp runtime/src/core/rpx_inspect.cpp)
+target_include_directories(r5e_stage_test PRIVATE runtime/src)
+target_link_libraries(r5e_stage_test PRIVATE ZLIB::ZLIB)
+add_test(NAME r5e_stage COMMAND r5e_stage_test)
+
 
 if(NSMBU_HAS_VULKAN)
   add_executable(attachment_view_usage_test runtime/test/attachment_view_usage_test.cpp)
