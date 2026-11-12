@@ -146,7 +146,12 @@ int nsmbu_r5_prepare_cpu(uint32_t entry, uint32_t stack_base,
     s_r5_cpu.r[3] = 0;  // argc=0; real startup argv not prepared yet
     s_r5_cpu.r[4] = 0;  // argv=null
     s_r5_cpu.lr = 0;
-    s_r5_cpu.res_addr = 0xFFFFFFFFu;
+    // Exact upstream threads.cpp::init_cpu floating/quantization defaults.
+    s_r5_cpu.gqr[2] = 0x40004u;
+    s_r5_cpu.gqr[3] = 0x50005u;
+    s_r5_cpu.gqr[4] = 0x60006u;
+    s_r5_cpu.gqr[5] = 0x70007u;
+    s_r5_cpu.fpscr = 4u;
     output->entry = s_r5_cpu.pc;
     output->stack_base = stack_base;
     output->stack_size = stack_size;
