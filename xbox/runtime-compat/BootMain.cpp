@@ -11,6 +11,7 @@
 #include <memory>
 #include "core/xbox_guest_vm.h"
 #include "bootfirst_api.h"
+#include "RpxProbe.h"
 
 using namespace Windows::ApplicationModel::Core;
 using namespace Windows::UI::Core;
@@ -20,7 +21,7 @@ namespace {
 HANDLE g_logFile = INVALID_HANDLE_VALUE;
 
 void Log(const char* text) noexcept {
-    OutputDebugStringA("[NSMBU/R4] ");
+    OutputDebugStringA("[NSMBU/R5] ");
     OutputDebugStringA(text);
     OutputDebugStringA("\r\n");
     if (g_logFile != INVALID_HANDLE_VALUE) {
@@ -35,11 +36,11 @@ void OpenLog() noexcept {
     try {
         auto folder = Windows::Storage::ApplicationData::Current->LocalFolder;
         std::wstring path(folder->Path->Data());
-        path += L"\\nsmbu_r4_boot_preflight.txt";
+        path += L"\\nsmbu_r5_stage_preflight.txt";
         g_logFile = CreateFile2(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
                                 CREATE_ALWAYS, nullptr);
     } catch (...) {
-        OutputDebugStringA("[NSMBU/R4] LocalState log unavailable\r\n");
+        OutputDebugStringA("[NSMBU/R5] LocalState log unavailable\r\n");
     }
 }
 
@@ -100,8 +101,16 @@ void RunPreflight() {
     } else {
         Log("R4 PREFLIGHT PASS: guest VM + entire native function table + entrypoint mapping");
     }
+    if (result == 0 && table.entry_registered) {
+        Log("R5 PHASE: stage owner-local, byte-verified USA_V0 RPX into guest memory");
+        Log("R5 inputs: LocalState/red-pro2.rpx; not embedded in AppX or GitHub");
+        xboxrpxprobe::run(guest, &Log, "USA_V0");
+        Log("R5 NOTE: only raw RPX sections were staged; no relocations or Cafe OS");
+    } else {
+        Log("R5 SKIP: native function table not ready");
+    }
     nsmbu_bootfirst_shutdown_dispatch();
-    Log("R4 END: no PPC game entry called; no RPX staged; no Cafe OS initialized");
+    Log("R5 END: native Mario game entry never called; runtime scheduler/HLE not initialized");
 }
 }
 
@@ -133,8 +142,8 @@ public:
             Log("R4 unknown native/WinRT exception");
         }
         // Deliberately stay visible for diagnostics; a black screen is not
-        // gameplay. Read LocalState/nsmbu_r4_boot_preflight.txt for results.
-        Log("R4 diagnostic shell is idle; close app to exit");
+        // gameplay. Read LocalState/nsmbu_r5_stage_preflight.txt for results.
+        Log("R5 diagnostic shell is idle; close app to exit");
         while (!closed_) {
             window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessOneAndAllPending);
         }
