@@ -36,6 +36,11 @@ typedef struct NSMBUR5CpuSnapshot {
     uint32_t core;
     uint32_t argc;
     uint32_t argv;
+    uint32_t fpscr;
+    uint32_t gqr2;
+    uint32_t gqr3;
+    uint32_t gqr4;
+    uint32_t gqr5;
 } NSMBUR5CpuSnapshot;
 // Returns 0 if native entry, stack and SDA regs are prepared; never jumps
 // into Nintendo code. Negative values denote unsafe or missing prerequisites.
