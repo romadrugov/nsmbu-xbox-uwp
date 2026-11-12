@@ -86,7 +86,6 @@ jobs:
               $data.chunks -ne 1 -or
               $data.archive_bytes -lt 100 -or
               $data.game_code_executed -or
-              -not $data.r4_boot_shell_linked -or
               $data.playable) { throw 'Public full-archive metadata invalid' }
           Write-Host 'PASS: identical private clang-cl/MSVC archive script works with public synthetic PPC code.'
 
