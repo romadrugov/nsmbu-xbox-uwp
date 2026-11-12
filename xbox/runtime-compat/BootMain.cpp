@@ -38,7 +38,7 @@ void OpenLog() noexcept {
     try {
         auto folder = Windows::Storage::ApplicationData::Current->LocalFolder;
         std::wstring path(folder->Path->Data());
-        path += L"\\nsmbu_r5f_visual_preview.txt";
+        path += L"\\nsmbu_r6a_first_native_leaf.txt";
         g_logFile = CreateFile2(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
                                 CREATE_ALWAYS, nullptr);
     } catch (...) {
@@ -81,7 +81,11 @@ bool CheckSparseGuestMemory(xboxguest::GuestVm& vm) {
 }
 
 void RunPreflight() {
+#if defined(NSMBU_R6A_EXECUTE_LEAF)
+    Log("R6A owner opted in: one strictly validated native game leaf may execute");
+#else
     Log("R4 native boot preflight START; game code execution DISABLED");
+#endif
     xboxguest::GuestVm guest;
     if (!CheckSparseGuestMemory(guest)) {
         Log("R4 STOP: Wii U guest address space not ready");
@@ -122,7 +126,7 @@ void RunPreflight() {
         Log("R5 SKIP: native function table not ready");
     }
     nsmbu_bootfirst_shutdown_dispatch();
-    Log("R5 END: native Mario game entry never called; runtime scheduler/HLE not initialized");
+    Log("R6A END: real game ENTRY never called; runtime scheduler/HLE not initialized");
 }
 }
 
