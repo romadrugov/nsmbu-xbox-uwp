@@ -59,6 +59,26 @@ typedef struct NSMBUR5ImportAudit {
     uint32_t first_data_addr;
 } NSMBUR5ImportAudit;
 int nsmbu_r5_audit_imports(NSMBUR5ImportAudit* output);
+// R6A: opt-in, one-shot execution of a statically vetted PURE leaf from the
+// locally SHA-verified USA_V0 RPX. Unlike R5, success actually calls a
+// recompiled game function. Does not call the game entrypoint or Cafe OS.
+// Only a tiny PPC opcode pattern (li r3, imm; blr OR blr) is admitted.
+// Returns: 0 executed and matched, 1 no safe candidate, negative = failed.
+typedef struct NSMBUR6LeafReport {
+    uint32_t candidate;
+    uint32_t pattern;           // 2 = li r3, signed-imm; blr; 1 = blr
+    uint32_t scanned_functions;
+    uint32_t initial_r3;
+    uint32_t expected_r3;
+    uint32_t actual_r3;
+    uint32_t actual_pc;
+    uint32_t stack_preserved;
+} NSMBUR6LeafReport;
+// Valid only after successful R5 CPU setup and private RPX SHA check.
+// 'text' must be the verified and staged .text section, not arbitrary bytes.
+// Caller opt-in and runtime compile flag are REQUIRED before invocation.
+int nsmbu_r6_run_pure_leaf(const uint8_t* text, uint32_t text_address,
+                           uint32_t text_size, NSMBUR6LeafReport* output);
 void nsmbu_bootfirst_shutdown_dispatch(void);
 uint32_t nsmbu_bootfirst_trace_count(void);
 #ifdef __cplusplus
