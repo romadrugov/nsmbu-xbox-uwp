@@ -103,7 +103,16 @@ int nsmbu_bootfirst_inspect_table(NSMBUBootTableStatus* report) {
     if (g_recomp_entry_point == 0 || g_recomp_func_count == 0 ||
         g_recomp_func_count > 200000u || g_recomp_import_count > 20000u)
         return -1;
-    if (!nsmbu_bootfirst_init_dispatch())
+    const int initialized = nsmbu_bootfirst_init_dispatch();
+    HeadlessDispatchDiagnostic diagnostic = {0};
+    headless_dispatch_diagnostic(&diagnostic);
+    report->dispatch_failure = diagnostic.failure;
+    report->dispatch_source = diagnostic.source;
+    report->dispatch_index = diagnostic.index;
+    report->dispatch_address = diagnostic.address;
+    report->fallback_entries = diagnostic.fallback;
+    report->null_targets = diagnostic.null_targets;
+    if (!initialized)
         return -2;
     report->entry_registered =
         headless_dispatch_lookup(g_recomp_entry_point) != 0 ? 1u : 0u;
