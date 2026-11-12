@@ -292,6 +292,11 @@ def _parse_hook(text, where):
     return site, canon, len(parts) == 2
 
 def hook_files(directory=None):
+    # Explicit boot-first path: recompile the unmodified PPC functions without
+    # desktop/mod hook substitutions. The default remains byte-for-byte
+    # identical and still uses the standard hook manifests.
+    if os.environ.get("NSMBU_RECOMP_DISABLE_HOOKS") == "1":
+        return []
     d = directory or HERE
     return [os.path.join(d, "hooks.txt")] + sorted(glob.glob(os.path.join(glob.escape(d), "hooks_*.txt")))
 
