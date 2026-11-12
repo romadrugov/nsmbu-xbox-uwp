@@ -170,6 +170,97 @@ int nsmbu_r5_prepare_cpu(uint32_t entry, uint32_t stack_base,
     return 0;
 }
 
+// R6A: private-only opt-in. Invoke exactly one independently recognized
+// two-opcode or one-opcode PPC leaf using the already-linked *actual* native
+// recompilation. The caller must have verified the full USA_V0 RPX SHA,
+// staged the .text bytes, and prepared the R5 CPU before calling.
+//
+// No guest entrypoint, data imports, HLE, schedulers or general PPC execution.
+// This is intentionally narrow: a single unconditionally returning function.
+// If the owner RPX has no such linked function, return NO_CANDIDATE.
+// An unknown instruction, branch, memory access or extra opcode is NEVER
+// admitted as a shortcut to a "game is running" claim.
+#ifdef NSMBU_R6A_EXECUTE_LEAF
+static uint32_t r6_be32(const uint8_t* p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+           ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+}
+static int r6_candidate(const uint8_t* text, uint32_t base,
+                        uint32_t length, uint32_t address, uint32_t pattern,
+                        uint32_t* expected) {
+    if (address < base || (address & 3u)) return 0;
+    const uint64_t offset = (uint64_t)address - base;
+    const uint64_t needed = (pattern == 2u) ? 8u : 4u;
+    if (offset + needed > length) return 0;
+    const uint32_t a = r6_be32(text + offset);
+    if (pattern == 2u) {
+        if ((a & 0xFFFF0000u) != 0x38600000u ||
+            r6_be32(text + offset + 4u) != 0x4E800020u) return 0;
+        *expected = (uint32_t)(int32_t)(int16_t)(a & 0xFFFFu);
+        return 1;
+    }
+    if (pattern == 1u && a == 0x4E800020u) {
+        *expected = 0x13572468u;  // unchanged r3 sentinel
+        return 1;
+    }
+    return 0;
+}
+int nsmbu_r6_run_pure_leaf(const uint8_t* text, uint32_t text_address,
+                           uint32_t text_size, NSMBUR6LeafReport* output) {
+    if (!output) return -1;
+    memset(output, 0, sizeof(*output));
+    // Fail closed unless this is the known owner-private USA_V0 build.
+    // In particular, the synthetic public fixture must not reach this call.
+    if (!text || text_address != 0x02000020u ||
+        text_size < 8u || text_size > 16u * 1024u * 1024u ||
+        g_recomp_entry_point != 0x02AA2E50u ||
+        g_recomp_func_count != 84231u ||
+        g_recomp_import_count != 2821u ||
+        s_r5_cpu.pc != g_recomp_entry_point ||
+        s_r5_cpu.r[1] == 0u) return -2;
+
+    // Prefer an observable constant return. Fall back to a real no-op leaf
+    // only when the owner build has no matching 'li r3,imm; blr' function.
+    for (uint32_t pattern = 2u; pattern >= 1u; --pattern) {
+        for (uint32_t i = 0; i < g_recomp_func_count; ++i) {
+            ++output->scanned_functions;
+            const RecompEntry* entry = &g_recomp_funcs[i];
+            if (!entry->fn ||
+                headless_dispatch_lookup(entry->addr) != entry->fn)
+                continue;
+            uint32_t expected = 0;
+            if (!r6_candidate(text, text_address, text_size, entry->addr,
+                              pattern, &expected)) continue;
+
+            Cpu cpu = s_r5_cpu;
+            cpu.pc = entry->addr;
+            cpu.r[3] = 0x13572468u;
+            cpu.lr = 0u;
+            output->candidate = entry->addr;
+            output->pattern = pattern;
+            output->initial_r3 = cpu.r[3];
+            output->expected_r3 = expected;
+            const uint32_t original_stack = cpu.r[1];
+            const uint32_t original_r2 = cpu.r[2];
+            const uint32_t original_r13 = cpu.r[13];
+
+            // This is the first actually executed owner-derived x64 function.
+            // The opcode check prohibits memory/HLE/branching from this leaf.
+            entry->fn(&cpu);
+            output->actual_r3 = cpu.r[3];
+            output->actual_pc = cpu.pc;
+            output->stack_preserved =
+                cpu.r[1] == original_stack &&
+                cpu.r[2] == original_r2 &&
+                cpu.r[13] == original_r13;
+            return (cpu.r[3] == expected && output->stack_preserved)
+                ? 0 : -3;
+        }
+    }
+    return 1;  // No strictly vetted leaf in verified native function table.
+}
+#endif
+
 // The recompiler generates weak default import wrappers that abort through
 // hle_unimplemented. Therefore a registered pointer does NOT mean the OS
 // service is implemented. This audit never invokes any imported function.
