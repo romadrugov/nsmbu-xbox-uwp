@@ -97,6 +97,47 @@ int main() {
         prepared[3].crc32!=0x758D6336u)
         return fail(".bss must be zero-filled") ? 0:1;
 
+    // R5E opt-in must stage only two known boot metadata/data sections.
+    // All bytes below reuse this hand-authored synthetic fixture.
+    auto withBoot = image;
+    xboxrpx::Section syscall{};
+    syscall.name = ".syscall";
+    syscall.type = 1u;
+    syscall.flags = 6u;
+    syscall.address = 0x02000100u; // distinct from .text
+    syscall.file_offset = image.sections[2].file_offset;
+    syscall.file_bytes = 8u;
+    syscall.memory_bytes = 8u;
+    withBoot.sections.push_back(syscall);
+    xboxrpx::Section module{};
+    module.name = ".module_id";
+    module.type = 1u;
+    module.flags = 3u;
+    module.address = 0x10018000u; // inside synthetic MEM2 gap
+    module.file_offset = image.sections[3].file_offset;
+    module.file_bytes = 8u;
+    module.memory_bytes = 8u;
+    withBoot.sections.push_back(module);
+    std::vector<xboxrpx::PreparedSection> bootPrepared;
+    if (!xboxrpx::prepare_sections(bytes.data(),bytes.size(),withBoot,
+                                    bootPrepared,error,true) ||
+        bootPrepared.size()!=6 ||
+        bootPrepared[4].name!=".syscall" ||
+        bootPrepared[5].name!=".module_id")
+        return fail("R5E exact boot-section opt-in failed") ? 0:1;
+    uint32_t mem2Start=0,mem2Bytes=0;
+    if (!xboxrpx::boot_mem2_span(bootPrepared,mem2Start,mem2Bytes) ||
+        mem2Start!=0x10000000u || mem2Bytes!=0x20040u)
+        return fail("R5E contiguous MEM2 span mismatch") ? 0:1;
+    if (!xboxrpx::prepare_sections(bytes.data(),bytes.size(),withBoot,
+                                    bootPrepared,error) || bootPrepared.size()!=4)
+        return fail("R5E default smoke must remain 4 sections") ? 0:1;
+    auto hugeSpan=bootPrepared;
+    hugeSpan.push_back(bootPrepared[0]);
+    hugeSpan.back().address=0x20000000u;
+    if (xboxrpx::boot_mem2_span(hugeSpan,mem2Start,mem2Bytes))
+        return fail("R5E unbounded MEM2 accepted") ? 0:1;
+
     // A bad section cannot replace previously prepared guest data.
     const auto goodCrc = prepared[0].crc32;
     auto overlap = image;
