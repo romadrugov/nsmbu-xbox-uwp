@@ -39,7 +39,7 @@ struct R5DRelocAudit {
 // window [base-0x8000, base+0x7fff]. Not a guest access/permissions test.
 uint64_t r5d_staged_sda_window_bytes(
     uint32_t base, const std::vector<PreparedSection>& prepared);
-// Limits: 512K RELA records total; one decoded symbol table <=32MiB;
+// Limits: 96 MiB aggregate decoded RELA; each decoded section <=32MiB;
 // all section offsets/symbol indices bounded. Output unchanged on failure.
 // R5D is a metadata-only audit: already-recompiled import address rewrites
 // may be present in native generated code and must NOT be re-applied.
