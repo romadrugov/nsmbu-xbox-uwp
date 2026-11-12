@@ -9,6 +9,11 @@ on:
       - "xbox/runtime-compat/private_game_table_probe.c"
       - "xbox/runtime-compat/link_probe.cpp"
       - "xbox/runtime-compat/bootfirst_runtime.c"
+      - "xbox/runtime-compat/bootfirst_api.h"
+      - "xbox/runtime-compat/BootMain.cpp"
+      - "xbox/runtime-compat/NSMBUBootPreflight.vcxproj"
+      - "xbox/runtime-compat/PackageBootPreflight.appxmanifest"
+      - "tools/xbox/package_boot_preflight.ps1"
       - "runtime/src/core/headless_dispatch.c"
       - "xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj"
       - ".github/workflows/xbox-first-real-link-preflight.yml"
@@ -20,6 +25,11 @@ on:
       - "xbox/runtime-compat/private_game_table_probe.c"
       - "xbox/runtime-compat/link_probe.cpp"
       - "xbox/runtime-compat/bootfirst_runtime.c"
+      - "xbox/runtime-compat/bootfirst_api.h"
+      - "xbox/runtime-compat/BootMain.cpp"
+      - "xbox/runtime-compat/NSMBUBootPreflight.vcxproj"
+      - "xbox/runtime-compat/PackageBootPreflight.appxmanifest"
+      - "tools/xbox/package_boot_preflight.ps1"
       - "runtime/src/core/headless_dispatch.c"
       - "xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj"
       - ".github/workflows/xbox-first-real-link-preflight.yml"
@@ -39,17 +49,28 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $out = Join-Path $env:RUNNER_TEMP 'nsmbu-public-first-link'
-          & '.\tools\xbox\try_private_game_link.ps1' -PublicFixture -OutputDir $out
+          & '.\tools\xbox\try_private_game_link.ps1' -PublicFixture -OutputDir $out -BuildBootShell
           if ($LASTEXITCODE -ne 0) { throw 'Public synthetic archive did not pass the private-first-link pipeline' }
           $data = Get-Content (Join-Path $out 'link-summary.json') -Raw | ConvertFrom-Json
           if (-not $data.linked_uwp_x64_executable -or
               $data.input -ne 'PUBLIC_SYNTHETIC_PPC' -or
               $data.game_code_executed -or
+              -not $data.r4_boot_shell_linked -or
               $data.playable) {
             throw 'Link metadata verification failed'
           }
           $exe = Get-ChildItem (Join-Path $out 'app') -Filter 'NSMBURuntimeLinkProbe.exe' -Recurse -File | Select-Object -First 1
           if (-not $exe) { throw 'Public UWP EXE missing' }
+          $bootExe = Get-ChildItem (Join-Path $out 'boot-app') -Filter 'NSMBUBootPreflight.exe' -Recurse -File | Select-Object -First 1
+          if (-not $bootExe) { throw 'R4 activatable WinRT boot shell EXE missing' }
+          Write-Host "PASS: R4 native WinRT guest VM + entrypoint readiness shell linked: $($bootExe.Length) bytes"
+          $packageDir = Join-Path $env:RUNNER_TEMP 'nsmbu-public-r4-package'
+          & '.\tools\xbox\package_boot_preflight.ps1' -BuildRoot (Join-Path $out 'boot-app') -OutputDir $packageDir
+          if ($LASTEXITCODE -ne 0) { throw 'R4 public synthetic AppX packaging failed' }
+          $appx = Join-Path $packageDir 'NSMBUBootPreflight_R4_x64.appx'
+          if (-not (Test-Path $appx)) { throw 'R4 signed public fixture AppX not found' }
+          Write-Host "PASS: R4 public synthetic WinRT AppX signed + unpack-verified ($((Get-Item $appx).Length) bytes)."
+          Write-Host 'No user RPX/game code in this PUBLIC package; package is not uploaded.'
           Write-Host "PASS: public recompiled PPC function table linked in UWP AppContainer x64: $($exe.Length) bytes"
           Write-Host 'No Nintendo game RPX/code, artifacts, or runtime execution in this CI.'
       - name: Verify the full clang-cl/MSVC archive script on public PPC fixture ONLY

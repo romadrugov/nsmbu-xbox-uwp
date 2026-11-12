@@ -18,6 +18,7 @@
 #include <windows.h>
 #include "core/headless_dispatch.h"
 #include "recomp_table.h"
+#include "bootfirst_api.h"
 
 /* PPC_ENTER reads these from the generated PowerPC-to-C source. Three
    Espresso cores, same storage type as the upstream scheduler. */
@@ -90,6 +91,34 @@ int nsmbu_bootfirst_init_dispatch(void) {
         return 0;
     return headless_dispatch_init();
 }
+// R4 preflight: load *all* linked game entries into the native dispatcher and
+// check that the real entry point resolves. Do not call the entry function.
+// The diagnostic shell checks the fixed guest VM separately first.
+int nsmbu_bootfirst_inspect_table(NSMBUBootTableStatus* report) {
+    if (!report) return -1;
+    report->entry_address = g_recomp_entry_point;
+    report->functions = g_recomp_func_count;
+    report->imports = g_recomp_import_count;
+    report->entry_registered = 0;
+    if (g_recomp_entry_point == 0 || g_recomp_func_count == 0 ||
+        g_recomp_func_count > 200000u || g_recomp_import_count > 20000u)
+        return -1;
+    const int initialized = nsmbu_bootfirst_init_dispatch();
+    HeadlessDispatchDiagnostic diagnostic = {0};
+    headless_dispatch_diagnostic(&diagnostic);
+    report->dispatch_failure = diagnostic.failure;
+    report->dispatch_source = diagnostic.source;
+    report->dispatch_index = diagnostic.index;
+    report->dispatch_address = diagnostic.address;
+    report->fallback_entries = diagnostic.fallback;
+    report->null_targets = diagnostic.null_targets;
+    if (!initialized)
+        return -2;
+    report->entry_registered =
+        headless_dispatch_lookup(g_recomp_entry_point) != 0 ? 1u : 0u;
+    return report->entry_registered ? 0 : -3;
+}
+
 void nsmbu_bootfirst_shutdown_dispatch(void) {
     headless_dispatch_reset();
 }

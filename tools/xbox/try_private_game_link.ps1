@@ -8,7 +8,8 @@
 param(
   [Parameter(Mandatory=$true,ParameterSetName='Private')][string]$PrivateArchive,
   [Parameter(Mandatory=$true,ParameterSetName='Public')][switch]$PublicFixture,
-  [Parameter(Mandatory=$true)][string]$OutputDir
+  [Parameter(Mandatory=$true)][string]$OutputDir,
+  [switch]$BuildBootShell
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -142,17 +143,53 @@ $linkExit = $LASTEXITCODE
 $executables = @(Get-ChildItem -LiteralPath $appOut -Filter 'NSMBURuntimeLinkProbe.exe' -Recurse -File -ErrorAction SilentlyContinue)
 $exe = if ($executables.Count -eq 1) { $executables[0].FullName } else { $null }
 $ok = ($linkExit -eq 0) -and ($null -ne $exe)
+# Optional R4: compile a REAL activatable C++/CX WinRT app that validates
+# the 4-GiB guest VM and native PPC entrypoint dispatch table on Xbox.
+# This step does NOT run the game's entrypoint or embed RPX sections.
+$bootOk = (-not $BuildBootShell)
+if ($BuildBootShell -and $ok) {
+  $bootOut = Join-Path $dest 'boot-app'
+  $bootInt = Join-Path $dest 'boot-int'
+  foreach ($p in @($bootOut, $bootInt)) {
+    New-Item -ItemType Directory -Path $p -Force | Out-Null
+  }
+  $bootProject = Join-Path $root 'xbox/runtime-compat/NSMBUBootPreflight.vcxproj'
+  $bootArgs = @(
+    "/p:OutDir=$bootOut/",
+    "/p:IntDir=$bootInt/",
+    "/p:NSMBUR4Archive=$archive",
+    "/p:NSMBUR4BridgeObj=$bridge",
+    "/p:NSMBUR4MathObj=$mathObj",
+    "/p:NSMBUR4DispatchObj=$headlessObj",
+    "/p:NSMBUR4RuntimeObj=$bootObj"
+  )
+  & $msbuild $bootProject @common @bootArgs *> (Join-Path $dest 'boot-link.log')
+  $bootExit = $LASTEXITCODE
+  $bootExecutables = @(Get-ChildItem $bootOut -Recurse -File -Filter 'NSMBUBootPreflight.exe' -ErrorAction SilentlyContinue)
+  $bootOk = ($bootExit -eq 0 -and $bootExecutables.Count -eq 1)
+  if (-not $bootOk) {
+    Write-Host "R4 WinRT boot-shell link failed: msbuild exit=$bootExit, EXEs=$($bootExecutables.Count)"
+    if ($PublicFixture) {
+      Write-Host 'PUBLIC fixture R4 MSBuild log (last 40 lines):'
+      Get-Content (Join-Path $dest 'boot-link.log') -Tail 40 | ForEach-Object { Write-Host $_ }
+    }
+  } else {
+    Write-Host "R4 WinRT boot-shell linked: $($bootExecutables[0].Length) bytes"
+  }
+}
 $report = [ordered]@{
   schema = 'nsmbu-private-first-link-v1'
   input = $mode
   linked_uwp_x64_executable = $ok
+  r4_boot_shell_requested = [bool]$BuildBootShell
+  r4_boot_shell_linked = [bool]$bootOk
   game_code_executed = $false
   rendered_real_game_frame = $false
   playable = $false
   private_output_only = $true
 }
 $report | ConvertTo-Json | Set-Content (Join-Path $dest 'link-summary.json') -Encoding UTF8
-if (-not $ok) {
+if (-not $ok -or -not $bootOk) {
   $errors = @(Get-Content $linkLog | Where-Object { $_ -match 'error LNK\d+|fatal error LNK\d+|error C\d+|error MSB\d+' })
   Write-Host "UWP archive link FAILED: MSBuild exit=$linkExit, found EXEs=$($executables.Count), diagnostics=$($errors.Count)."
   $errors | Select-Object -First 8 | ForEach-Object { Write-Host $_ }
@@ -167,5 +204,6 @@ if (-not $ok) {
   exit 1
 }
 Write-Host "UWP ARCHIVE LINK PASS ($mode): $exe"
+if ($BuildBootShell) { Write-Host 'R4 BOOT SHELL LINK PASS (WinRT App, not yet a signed AppX)' }
 Write-Host 'Not a playable game: no game execution, GPU renderer or AppX deployment.'
 Write-Host "Safe summary: $(Join-Path $dest 'link-summary.json')"
