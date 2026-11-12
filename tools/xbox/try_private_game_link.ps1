@@ -71,6 +71,17 @@ $flags = @('/nologo','/c','/O1','/MD','/clang:-std=c11','/DWINAPI_FAMILY=WINAPI_
 & $clang @flags *> (Join-Path $dest 'bridge.log')
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bridge)) { throw 'Bridge compiler failed; inspect only LOCAL bridge.log' }
 
+# Use the unchanged upstream Espresso floating-point implementation rather
+# than replacing two game-required PowerPC operations with placeholder stubs.
+# Both public fixture and private paths compile this same source with clang-cl.
+$mathObj = Join-Path $dest 'espresso_fp.obj'
+$mathArgs = @('/nologo','/c','/O1','/MD','/clang:-std=c11',
+  '/DWINAPI_FAMILY=WINAPI_FAMILY_APP',
+  "/I$(Join-Path $root 'runtime/include')","/Fo$mathObj",
+  (Join-Path $root 'runtime/src/core/espresso_fp.c'))
+& $clang @mathArgs *> (Join-Path $dest 'espresso-fp.log')
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $mathObj)) { throw 'Espresso FP compile failed; inspect only LOCAL espresso-fp.log' }
+
 $compatOut = Join-Path $dest 'compat'
 $compatInt = Join-Path $dest 'compat-int'
 $appOut = Join-Path $dest 'app'
@@ -99,7 +110,8 @@ $linkLog = Join-Path $dest 'private-link.log'
 $extra = @("/p:OutDir=$appOut/","/p:IntDir=$appInt/",
  "/p:NSMBUCompatArchive=$compatLib",
  "/p:NSMBUPrivateArchive=$archive",
- "/p:NSMBUPrivateBridgeObj=$bridge")
+ "/p:NSMBUPrivateBridgeObj=$bridge",
+ "/p:NSMBUMathObject=$mathObj")
 & $msbuild $project @common @extra *> $linkLog
 $linkExit = $LASTEXITCODE
 # MSBuild may place the EXE in OutDir/ProjectName rather than directly in OutDir.
