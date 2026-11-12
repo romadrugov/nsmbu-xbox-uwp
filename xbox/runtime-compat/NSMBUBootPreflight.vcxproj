@@ -51,6 +51,7 @@
   <ItemGroup>
     <ClCompile Include="BootMain.cpp" />
     <ClCompile Include="BootPreview.cpp" />
+    <ClCompile Include="..\\..\\runtime\\src\\gfx\\d3d12\\format_map.cpp" />
     <ClCompile Include="..\\..\\runtime\\src\\gfx\\d3d12\\texture_upload.cpp" />
     <ClCompile Include="..\..\runtime\src\core\xbox_guest_vm.cpp" />
     <ClCompile Include="..\..\runtime\src\core\rpx_inspect.cpp" />
