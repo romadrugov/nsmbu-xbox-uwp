@@ -417,6 +417,38 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                                     }
                                     log("[rpx/R5D] RELOCATIONS NOT APPLIED. Imported .text immediates "
                                         "were considered by recomp/recomp.py; do not reapply blindly.");
+#if defined(NSMBU_R7_ENTRY_PROBE)
+                                    // Owner-explicit R7: execute the real
+                                    // compiled game entrypoint, only after
+                                    // verified exact USA_V0 RPX and R5B/R5D.
+                                    // We deliberately STOP on unsupported
+                                    // Cafe OS, unknown PPC, traps or SEH fault.
+                                    // No fake successful service returns.
+                                    if (requiredBuild &&
+                                        reloc.invalid_symbols == 0 &&
+                                        reloc.target_outside_section == 0 &&
+                                        reloc.rela_sections == 3) {
+                                        log("[rpx/R7] BEGIN owner-private real entrypoint attempt (no Cafe OS yet)");
+                                        NSMBUR7EntryReport boot{};
+                                        const int bootRc = nsmbu_r7_try_entry(&boot);
+                                        sprintf_s(detail,
+                                            "[rpx/R7] STOP: setup=%d status=%u entry=%08X "
+                                            "last-pc=%08X lr=%08X r3=%08X entered=%u loops=%u",
+                                            bootRc, boot.status, boot.entry, boot.last_pc,
+                                            boot.last_lr, boot.final_r3,
+                                            boot.functions_entered, boot.loop_ticks);
+                                        log(detail);
+                                        sprintf_s(detail,
+                                            "[rpx/R7] FIRST BLOCKER: exception=%08X host-pc=%llX reason=%.120s",
+                                            boot.seh_code,
+                                            static_cast<unsigned long long>(boot.exception_address),
+                                            boot.stop_reason);
+                                        log(detail);
+                                        log("[rpx/R7] ENTRY attempt ended; menu/gameplay/render frame NOT confirmed");
+                                    } else {
+                                        log("[rpx/R7] SKIP: exact build or relocation integrity gate failed");
+                                    }
+#endif
 #if defined(NSMBU_R6A_EXECUTE_LEAF)
                                     // The user has explicitly opted into exactly one
                                     // pure native game leaf. Both section contents
@@ -463,7 +495,9 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
 #endif
                                 }
 #endif
-#if defined(NSMBU_R6A_EXECUTE_LEAF)
+#if defined(NSMBU_R7_ENTRY_PROBE)
+                                log("[rpx/R7] Game ENTRY was attempted with missing Cafe OS; normal gameplay remains unavailable");
+#elif defined(NSMBU_R6A_EXECUTE_LEAF)
                                 log("[rpx/R6A] Game ENTRY still disabled: Cafe OS/imports/scheduler not initialized");
 #else
                                 log("[rpx/R5B] EXECUTION STILL DISABLED: imports, relocations and Cafe OS not initialized");
@@ -477,7 +511,9 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
 #endif
             }
         }
-#if defined(NSMBU_R6A_EXECUTE_LEAF)
+#if defined(NSMBU_R7_ENTRY_PROBE)
+        log("[rpx/R7] Real game entry was attempted; complete HLE/scheduler/GX2 still unavailable");
+#elif defined(NSMBU_R6A_EXECUTE_LEAF)
         log("[rpx/R6A] Game ENTRY/HLE disabled; only the vetted optional leaf may have executed");
 #else
         log("[rpx/0.7] LOCAL game execution DISABLED: no entry-point jump, no relocations/HLE");

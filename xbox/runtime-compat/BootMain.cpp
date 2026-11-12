@@ -38,7 +38,7 @@ void OpenLog() noexcept {
     try {
         auto folder = Windows::Storage::ApplicationData::Current->LocalFolder;
         std::wstring path(folder->Path->Data());
-        path += L"\\nsmbu_r6a_first_native_leaf.txt";
+        path += L"\\nsmbu_r7_real_entrypoint.txt";
         g_logFile = CreateFile2(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
                                 CREATE_ALWAYS, nullptr);
     } catch (...) {
@@ -81,7 +81,9 @@ bool CheckSparseGuestMemory(xboxguest::GuestVm& vm) {
 }
 
 void RunPreflight() {
-#if defined(NSMBU_R6A_EXECUTE_LEAF)
+#if defined(NSMBU_R7_ENTRY_PROBE)
+    Log("R7 owner opted in: attempting the real game entrypoint, stop at first blocker");
+#elif defined(NSMBU_R6A_EXECUTE_LEAF)
     Log("R6A owner opted in: one strictly validated native game leaf may execute");
 #else
     Log("R4 native boot preflight START; game code execution DISABLED");
@@ -126,7 +128,11 @@ void RunPreflight() {
         Log("R5 SKIP: native function table not ready");
     }
     nsmbu_bootfirst_shutdown_dispatch();
+#if defined(NSMBU_R7_ENTRY_PROBE)
+    Log("R7 END: entry probe stopped; complete Cafe OS/GX2 still not initialized");
+#else
     Log("R6A END: real game ENTRY never called; runtime scheduler/HLE not initialized");
+#endif
 }
 }
 

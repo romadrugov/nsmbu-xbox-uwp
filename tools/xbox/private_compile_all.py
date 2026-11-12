@@ -98,6 +98,10 @@ def compile_all(args):
                "/DWINAPI_FAMILY=WINAPI_FAMILY_APP",
                "/I" + str(gen), "/I" + str(ROOT / "runtime" / "include"),
                "/Fo" + str(target), str(src)]
+        if args.r7_guest_budget:
+            # Applies only to owner-private opt-in or original PUBLIC fixture,
+            # never to ordinary desktop/game builds.
+            cmd.insert(6, "/DNSMBU_R7_GUEST_BUDGET=1")
         with (logs / (src.stem + ".log")).open("w", encoding="utf-8", errors="replace") as fd:
             status = subprocess.run(cmd, stdout=fd, stderr=subprocess.STDOUT, check=False)
         if status.returncode != 0:
@@ -126,6 +130,7 @@ def compile_all(args):
         "linked_uwp_x64_executable": False,
         "game_code_executed": False,
         "playable": False,
+        "r7_guest_budget_instrumented": bool(args.r7_guest_budget),
         "private_output_only": True,
     }
     (out / "compile-summary.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -139,6 +144,8 @@ def main():
     p.add_argument("--summary")
     p.add_argument("--out", required=True)
     p.add_argument("--public-fixture", action="store_true")
+    p.add_argument("--r7-guest-budget", action="store_true",
+                   help="private R7: instrument translated PPC_LOOP callbacks")
     a = p.parse_args()
     try:
         compile_all(a)

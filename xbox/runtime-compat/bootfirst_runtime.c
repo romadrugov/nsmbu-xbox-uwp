@@ -20,6 +20,41 @@
 #include "recomp_table.h"
 #include "bootfirst_api.h"
 
+#if defined(NSMBU_R7_ENTRY_PROBE)
+// R7 has to be compiled into the private application explicitly. The current
+// lightweight boot-first runtime has no Cafe OS/scheduler. Fail immediately
+// at a missing service; never return invented successes to the game.
+enum { kR7Exception = 0xE2470001u, kR7MaxFunctions = 20000u,
+       kR7MaxLoopTicks = 500000u, kR7MaxElapsedMs = 2500u };
+static _Atomic(int) s_r7_active = 0;
+static _Atomic(uint32_t) s_r7_funcs = 0;
+static _Atomic(uint32_t) s_r7_loops = 0;
+static _Atomic(uint32_t) s_r7_last_pc = 0;
+static uint64_t s_r7_start_ms = 0;
+static char s_r7_reason[160];
+static void r7_abort(const char* reason) {
+    if (reason && reason != s_r7_reason)
+        (void)snprintf(s_r7_reason, sizeof(s_r7_reason), "%s", reason);
+    // RaiseException is caught only by our owner-private entrypoint SEH frame.
+    RaiseException(kR7Exception, EXCEPTION_NONCONTINUABLE, 0, NULL);
+}
+static void r7_budget_check(void) {
+    if (atomic_load_explicit(&s_r7_funcs, memory_order_relaxed) >
+            kR7MaxFunctions ||
+        atomic_load_explicit(&s_r7_loops, memory_order_relaxed) >
+            kR7MaxLoopTicks ||
+        (GetTickCount64() - s_r7_start_ms) > kR7MaxElapsedMs) {
+        r7_abort("instrumented native function/loop/time budget reached");
+    }
+}
+// Only the R7-private rebuilt owner-derived C archive may reference this.
+void nsmbu_r7_loop_tick(void) {
+    if (!atomic_load_explicit(&s_r7_active, memory_order_relaxed)) return;
+    atomic_fetch_add_explicit(&s_r7_loops, 1u, memory_order_relaxed);
+    r7_budget_check();
+}
+#endif
+
 /* PPC_ENTER reads these from the generated PowerPC-to-C source. Three
    Espresso cores, same storage type as the upstream scheduler. */
 volatile int g_core_preempt[3] = {0, 0, 0};
@@ -38,6 +73,15 @@ static void fail_unsupported(const char* kind, uint32_t pc,
                    kind, (unsigned)pc, detail ? detail : "");
     OutputDebugStringA(message);
     /* Unsupported execution must not return success to game code. */
+#if defined(NSMBU_R7_ENTRY_PROBE)
+    if (atomic_load_explicit(&s_r7_active, memory_order_relaxed)) {
+        (void)snprintf(s_r7_reason, sizeof(s_r7_reason),
+                       "%.56s at %08X: %.86s", kind, (unsigned)pc,
+                       detail ? detail : "");
+        atomic_store_explicit(&s_r7_last_pc, pc, memory_order_relaxed);
+        r7_abort(s_r7_reason);
+    }
+#endif
     abort();
 }
 
@@ -45,6 +89,13 @@ void ppc_trace_enter(uint32_t pc) {
     const uint32_t pos =
         atomic_fetch_add_explicit(&s_trace_count, 1u, memory_order_relaxed);
     s_trace[pos & (kTraceCapacity - 1)] = pc;
+#if defined(NSMBU_R7_ENTRY_PROBE)
+    if (atomic_load_explicit(&s_r7_active, memory_order_relaxed)) {
+        atomic_store_explicit(&s_r7_last_pc, pc, memory_order_relaxed);
+        atomic_fetch_add_explicit(&s_r7_funcs, 1u, memory_order_relaxed);
+        r7_budget_check();
+    }
+#endif
 }
 
 uint32_t nsmbu_bootfirst_trace_count(void) {
@@ -169,6 +220,85 @@ int nsmbu_r5_prepare_cpu(uint32_t entry, uint32_t stack_base,
     output->gqr5 = s_r5_cpu.gqr[5];
     return 0;
 }
+
+// R7: first actual program entrypoint attempt, with all unsupported Cafe OS
+// paths explicitly intercepted. This is NOT a complete game runtime. The
+// public synthetic fixture links this code but is refused at runtime.
+#ifdef NSMBU_R7_ENTRY_PROBE
+static int r7_filter(unsigned int code,
+                     struct _EXCEPTION_POINTERS* exception,
+                     NSMBUR7EntryReport* output) {
+    output->seh_code = code;
+    output->exception_address = exception && exception->ExceptionRecord
+        ? (uint64_t)(uintptr_t)exception->ExceptionRecord->ExceptionAddress
+        : 0u;
+    output->status = code == kR7Exception ? 2u : 3u;
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+static int r7_call_protected(PpcFunc fn, Cpu* cpu,
+                             NSMBUR7EntryReport* output) {
+    int returned = 0;
+    // Deliberately in a plain C function: SEH must not unwind C++/CX objects.
+    // Fail closed for access violations and unsupported services.
+    __try {
+        fn(cpu);
+        returned = 1;
+    } __except(r7_filter(GetExceptionCode(), GetExceptionInformation(),
+                         output)) {
+        returned = 0;
+    }
+    return returned;
+}
+
+int nsmbu_r7_try_entry(NSMBUR7EntryReport* report) {
+    if (!report) return -1;
+    memset(report, 0, sizeof(*report));
+    report->entry = g_recomp_entry_point;
+    // No guest PC can be passed from user input. The RPX checksum is
+    // independently verified by RpxProbe before it calls this routine.
+    if (g_recomp_entry_point != 0x02AA2E50u ||
+        g_recomp_func_count != 84231u ||
+        g_recomp_import_count != 2821u ||
+        s_r5_cpu.pc != g_recomp_entry_point ||
+        s_r5_cpu.core != 1u || !s_r5_cpu.r[1]) return -2;
+    PpcFunc fn = headless_dispatch_lookup(g_recomp_entry_point);
+    if (!fn) return -3;
+
+    Cpu cpu = s_r5_cpu;
+    cpu.pc = g_recomp_entry_point;
+    cpu.lr = 0u;  // no synthetic OS caller or invented return address
+    cpu.r[3] = 0; // argc=0, argv=null as in R5 CPU preflight
+    cpu.r[4] = 0;
+    s_r7_reason[0] = 0;
+    atomic_store_explicit(&s_r7_funcs, 0, memory_order_relaxed);
+    atomic_store_explicit(&s_r7_loops, 0, memory_order_relaxed);
+    atomic_store_explicit(&s_r7_last_pc, cpu.pc, memory_order_relaxed);
+    s_r7_start_ms = GetTickCount64();
+    g_ppc_trace = 1;
+    atomic_store_explicit(&s_r7_active, 1, memory_order_release);
+    const int returned = r7_call_protected(fn, &cpu, report);
+    atomic_store_explicit(&s_r7_active, 0, memory_order_release);
+    g_ppc_trace = 0;
+    report->functions_entered =
+        atomic_load_explicit(&s_r7_funcs, memory_order_relaxed);
+    report->loop_ticks =
+        atomic_load_explicit(&s_r7_loops, memory_order_relaxed);
+    report->last_pc =
+        atomic_load_explicit(&s_r7_last_pc, memory_order_relaxed);
+    report->last_lr = cpu.lr;
+    report->final_r3 = cpu.r[3];
+    if (returned) {
+        report->status = 1u; // entrypoint returned (NOT gameplay)
+        (void)snprintf(report->stop_reason, sizeof(report->stop_reason),
+                       "real entrypoint returned (not a game boot)");
+    } else {
+        (void)snprintf(report->stop_reason, sizeof(report->stop_reason),
+                       "%s", s_r7_reason[0] ? s_r7_reason : "SEH guest/host fault");
+    }
+    return 0;
+}
+#endif
 
 // R6A: private-only opt-in. Invoke exactly one independently recognized
 // two-opcode or one-opcode PPC leaf using the already-linked *actual* native

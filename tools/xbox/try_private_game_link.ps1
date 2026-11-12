@@ -10,7 +10,8 @@ param(
   [Parameter(Mandatory=$true,ParameterSetName='Public')][switch]$PublicFixture,
   [Parameter(Mandatory=$true)][string]$OutputDir,
   [switch]$BuildBootShell,
-  [switch]$EnableR6Leaf
+  [switch]$EnableR6Leaf,
+  [switch]$EnableR7Entry
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -23,6 +24,9 @@ function InCheckout([string]$path) {
 if (InCheckout $dest) { throw 'OutputDir must be OUTSIDE public GitHub checkout' }
 if ($EnableR6Leaf -and -not $BuildBootShell) {
   throw 'R6A opt-in requires BuildBootShell'
+}
+if ($EnableR7Entry -and -not $BuildBootShell) {
+  throw 'R7 entrypoint opt-in requires BuildBootShell'
 }
 if (-not $PublicFixture -and $env:GITHUB_ACTIONS -eq 'true') {
   # Never accept private game inputs in public CI. The explicit owner-private
@@ -104,6 +108,9 @@ foreach ($unit in @(
     (Join-Path $root $unit.Source))
   if ($EnableR6Leaf -and $unit.Source -eq 'xbox/runtime-compat/bootfirst_runtime.c') {
     $args += '/DNSMBU_R6A_EXECUTE_LEAF=1'
+  }
+  if ($EnableR7Entry -and $unit.Source -eq 'xbox/runtime-compat/bootfirst_runtime.c') {
+    $args += '/DNSMBU_R7_ENTRY_PROBE=1'
   }
   & $clang @args *> (Join-Path $dest $unit.Log)
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path $unit.Out)) {
@@ -195,7 +202,8 @@ if ($BuildBootShell -and $ok) {
     "/p:NSMBUR4MathObj=$mathObj",
     "/p:NSMBUR4DispatchObj=$headlessObj",
     "/p:NSMBUR4RuntimeObj=$bootObj",
-    "/p:NSMBUR6AOptIn=$(if ($EnableR6Leaf) {'true'} else {'false'})"
+    "/p:NSMBUR6AOptIn=$(if ($EnableR6Leaf) {'true'} else {'false'})",
+    "/p:NSMBUR7EntryOptIn=$(if ($EnableR7Entry) {'true'} else {'false'})"
   )
   & $msbuild $bootProject @common @bootArgs *> (Join-Path $dest 'boot-link.log')
   $bootExit = $LASTEXITCODE
@@ -219,6 +227,7 @@ $report = [ordered]@{
   r4_boot_shell_linked = [bool]$bootOk
   game_code_executed = $false
   r6a_first_native_leaf_opt_in = [bool]$EnableR6Leaf
+  r7_real_entrypoint_opt_in = [bool]$EnableR7Entry
   rendered_real_game_frame = $false
   playable = $false
   private_output_only = $true

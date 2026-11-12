@@ -64,7 +64,15 @@ void ppc_preempt(Cpu* c);
         if (__builtin_expect(g_core_preempt[c->core], 0)) ppc_preempt(c);     \
     } while (0)
 
+// R7 private rebuild instrumentation: allow an actual game entrypoint
+// attempt with an interruptible loop budget. Default desktop builds remain
+// bit-for-bit unchanged and do not incur this callback overhead.
+#ifdef NSMBU_R7_GUEST_BUDGET
+void nsmbu_r7_loop_tick(void);
+#define PPC_LOOP() do { __asm__ __volatile__("" ::: "memory"); nsmbu_r7_loop_tick(); } while (0)
+#else
 #define PPC_LOOP() __asm__ __volatile__("" ::: "memory")
+#endif
 
 static inline uint8_t* ppc_ptr(uint32_t ea) { return PPC_MEM_BASE + ea; }
 static inline uint8_t ld8(uint32_t ea) { return *ppc_ptr(ea); }
