@@ -18,6 +18,7 @@ NON_ADDRESS = {
     ("mods/lua_guest.cpp", 0x02800000): "foreground bucket size",
     ("mods/lua_guest.cpp", 0x02000000): "MEM1 size",
     ("core/core.cpp", 0x02000000): "executable memory lower bound",
+    ("core/headless_dispatch.c", 0x02000000): "synthetic fixture text dispatch lower bound",
     ("gfx/metal/metal_main.mm", 0x02000000): "executable memory lower bound",
     ("hle/system_stubs.cpp", 0x02000000): "executable memory lower bound",
     ("hooks/interp.cpp", 0x02000000): "pointer lower bound",

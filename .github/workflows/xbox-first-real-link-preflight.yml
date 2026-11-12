@@ -10,6 +10,15 @@ on:
       - "xbox/runtime-compat/link_probe.cpp"
       - "xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj"
       - ".github/workflows/xbox-first-real-link-preflight.yml"
+  pull_request:
+    branches: [xbox-uwp]
+    paths:
+      - "tools/xbox/try_private_game_link.ps1"
+      - "tools/xbox/private_compile_all.py"
+      - "xbox/runtime-compat/private_game_table_probe.c"
+      - "xbox/runtime-compat/link_probe.cpp"
+      - "xbox/runtime-compat/NSMBURuntimeLinkProbe.vcxproj"
+      - ".github/workflows/xbox-first-real-link-preflight.yml"
   workflow_dispatch:
 
 permissions:

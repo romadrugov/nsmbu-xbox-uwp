@@ -20,7 +20,12 @@ function InCheckout([string]$path) {
 }
 if (InCheckout $dest) { throw 'OutputDir must be OUTSIDE public GitHub checkout' }
 if (-not $PublicFixture -and $env:GITHUB_ACTIONS -eq 'true') {
-  throw 'Private game code on public GitHub Actions is forbidden. Use private Windows machine.'
+  # Never accept private game inputs in public CI. The explicit owner-private
+  # workflow must check repository visibility before setting this opt-in.
+  if ($env:GITHUB_REPOSITORY -ne 'romadrugov/mkwii-xbox-build' -or
+      $env:NSMBU_PRIVATE_CI_OPT_IN -ne 'YES') {
+    throw 'Private game code is forbidden outside explicitly opted-in private CI.'
+  }
 }
 if (Test-Path $dest) {
   if (Get-ChildItem $dest -Force | Select-Object -First 1) { throw 'OutputDir must be empty/new to prevent stale private builds' }
@@ -66,6 +71,17 @@ $flags = @('/nologo','/c','/O1','/MD','/clang:-std=c11','/DWINAPI_FAMILY=WINAPI_
 & $clang @flags *> (Join-Path $dest 'bridge.log')
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bridge)) { throw 'Bridge compiler failed; inspect only LOCAL bridge.log' }
 
+# Use the unchanged upstream Espresso floating-point implementation rather
+# than replacing two game-required PowerPC operations with placeholder stubs.
+# Both public fixture and private paths compile this same source with clang-cl.
+$mathObj = Join-Path $dest 'espresso_fp.obj'
+$mathArgs = @('/nologo','/c','/O1','/MD','/clang:-std=c11',
+  '/DWINAPI_FAMILY=WINAPI_FAMILY_APP',
+  "/I$(Join-Path $root 'runtime/include')","/Fo$mathObj",
+  (Join-Path $root 'runtime/src/core/espresso_fp.c'))
+& $clang @mathArgs *> (Join-Path $dest 'espresso-fp.log')
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $mathObj)) { throw 'Espresso FP compile failed; inspect only LOCAL espresso-fp.log' }
+
 $compatOut = Join-Path $dest 'compat'
 $compatInt = Join-Path $dest 'compat-int'
 $appOut = Join-Path $dest 'app'
@@ -94,11 +110,15 @@ $linkLog = Join-Path $dest 'private-link.log'
 $extra = @("/p:OutDir=$appOut/","/p:IntDir=$appInt/",
  "/p:NSMBUCompatArchive=$compatLib",
  "/p:NSMBUPrivateArchive=$archive",
- "/p:NSMBUPrivateBridgeObj=$bridge")
+ "/p:NSMBUPrivateBridgeObj=$bridge",
+ "/p:NSMBUMathObject=$mathObj")
 & $msbuild $project @common @extra *> $linkLog
-$ok = $LASTEXITCODE -eq 0
-$exe = Join-Path $appOut 'NSMBURuntimeLinkProbe.exe'
-if ($ok -and -not (Test-Path $exe)) { $ok = $false }
+$linkExit = $LASTEXITCODE
+# MSBuild may place the EXE in OutDir/ProjectName rather than directly in OutDir.
+# Only accept a unique output inside the fresh private output directory.
+$executables = @(Get-ChildItem -LiteralPath $appOut -Filter 'NSMBURuntimeLinkProbe.exe' -Recurse -File -ErrorAction SilentlyContinue)
+$exe = if ($executables.Count -eq 1) { $executables[0].FullName } else { $null }
+$ok = ($linkExit -eq 0) -and ($null -ne $exe)
 $report = [ordered]@{
   schema = 'nsmbu-private-first-link-v1'
   input = $mode
@@ -111,12 +131,18 @@ $report = [ordered]@{
 $report | ConvertTo-Json | Set-Content (Join-Path $dest 'link-summary.json') -Encoding UTF8
 if (-not $ok) {
   $errors = @(Get-Content $linkLog | Where-Object { $_ -match 'error LNK\d+|fatal error LNK\d+|error C\d+|error MSB\d+' })
-  Write-Host "First real archive link FAILED: $($errors.Count) diagnostic lines."
+  Write-Host "UWP archive link FAILED: MSBuild exit=$linkExit, found EXEs=$($executables.Count), diagnostics=$($errors.Count)."
   $errors | Select-Object -First 8 | ForEach-Object { Write-Host $_ }
+  if ($PublicFixture) {
+    # Public code fixture only: its MSBuild output contains no game-derived symbols.
+    # Give CI a useful error when MSBuild returned an error without an LNK diagnostic.
+    Write-Host 'PUBLIC fixture link log (last 35 lines):'
+    Get-Content $linkLog -Tail 35 | ForEach-Object { Write-Host $_ }
+  }
   Write-Host "Full log LOCAL ONLY: $linkLog"
   Write-Host 'Share only metadata from link-summary.json; no private source, .lib, .obj or full logs.'
   exit 1
 }
-Write-Host "UWP PRIVATE ARCHIVE LINK PASS: $exe"
+Write-Host "UWP ARCHIVE LINK PASS ($mode): $exe"
 Write-Host 'Not a playable game: no game execution, GPU renderer or AppX deployment.'
 Write-Host "Safe summary: $(Join-Path $dest 'link-summary.json')"

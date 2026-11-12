@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile ALL private NSMBU generated C to Windows/MSVC-ABI COFF and .lib.
+r"""Compile ALL private NSMBU generated C to Windows/MSVC-ABI COFF and .lib.
 
 This MUST run on a PRIVATE Windows x64 machine with clang-cl and lib.exe.
 It NEVER uploads source/objects/logs. Use a fresh --out OUTSIDE checkout.
@@ -29,7 +29,14 @@ def compile_all(args):
     if os.name != "nt":
         raise ValueError("Windows x64 with VS developer tools is required; cannot use macOS clang-cl")
     if os.getenv("GITHUB_ACTIONS") == "true" and not args.public_fixture:
-        raise ValueError("refusing private game code on GitHub Actions")
+        # No game-derived input is permitted in public CI. Allow a deliberately
+        # opted-in, owner-controlled PRIVATE build repo only.
+        trusted_private_ci = (
+            os.getenv("GITHUB_REPOSITORY") == "romadrugov/mkwii-xbox-build"
+            and os.getenv("NSMBU_PRIVATE_CI_OPT_IN") == "YES"
+        )
+        if not trusted_private_ci:
+            raise ValueError("private game code forbidden outside explicitly opted-in private CI")
     gen = Path(args.generated).expanduser().resolve()
     out = Path(args.out).expanduser().resolve()
     if inside_repo(gen) and not args.public_fixture:
@@ -57,9 +64,28 @@ def compile_all(args):
     elif not args.public_fixture:
         raise ValueError("private generated imports.c missing")
     clang = shutil.which("clang-cl")
-    libexe = shutil.which("lib")
+    libexe = shutil.which("lib.exe") or shutil.which("lib")
+    if not libexe:
+        # GitHub's Windows runners install MSVC but do not always put lib.exe
+        # on PATH. VS Developer PowerShell already exposes it; otherwise
+        # resolve the actual installed toolset without guessing its version.
+        program_files_x86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+        vswhere = Path(program_files_x86) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+        if vswhere.is_file():
+            result = subprocess.run(
+                [str(vswhere), "-latest", "-products", "*", "-property", "installationPath"],
+                capture_output=True, text=True, check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                vc_tools = Path(result.stdout.strip()) / "VC" / "Tools" / "MSVC"
+                if vc_tools.is_dir():
+                    for version in sorted(vc_tools.iterdir(), reverse=True):
+                        candidate = version / "bin" / "Hostx64" / "x64" / "lib.exe"
+                        if candidate.is_file():
+                            libexe = str(candidate)
+                            break
     if not clang or not libexe:
-        raise ValueError("open x64 VS Developer PowerShell with clang-cl and lib.exe on PATH")
+        raise ValueError("requires clang-cl and MSVC x64 lib.exe (VS2022 C++ tools)")
     out.mkdir(parents=True, exist_ok=True)
     objs = out / "objects"
     logs = out / "logs"
