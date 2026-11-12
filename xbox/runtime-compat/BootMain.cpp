@@ -103,8 +103,8 @@ void RunPreflight() {
 
 public ref class App sealed : IFrameworkView {
 public:
-    virtual void Initialize(CoreApplicationView^ app) {
-        app->Activated += ref new Windows::Foundation::TypedEventHandler<
+    virtual void Initialize(CoreApplicationView^ applicationView) {
+        applicationView->Activated += ref new Windows::Foundation::TypedEventHandler<
             CoreApplicationView^,
             Windows::ApplicationModel::Activation::IActivatedEventArgs^>(
             this, &App::OnActivated);
@@ -114,7 +114,7 @@ public:
         window_->Closed += ref new Windows::Foundation::TypedEventHandler<
             CoreWindow^, CoreWindowEventArgs^>(this, &App::OnClosed);
     }
-    virtual void Load(Platform::String^ entry) { (void)entry; }
+    virtual void Load(Platform::String^ entryPoint) { (void)entryPoint; }
     virtual void Run() {
         window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
         OpenLog();
