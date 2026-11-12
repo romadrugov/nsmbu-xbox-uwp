@@ -18,6 +18,9 @@ public:
 // Author-created bridge compiled by clang-cl. This checks a privately
 // supplied recomp table but NEVER executes a Nintendo game function.
 extern "C" int nsmbu_private_game_link_metadata();
+// Resolve both real Espresso implementations from core/espresso_fp.c.
+// Do not execute the game or synthesize placeholder implementations.
+#include "ppc.h"
 #endif
 
 int main() {
@@ -31,6 +34,10 @@ int main() {
     auto* volatile unlink_test = &env::unset;
     (void)unlink_test;
 #ifdef NSMBU_PRIVATE_GAME_LINK
+    auto* volatile fres_link = &ppc_fres;
+    auto* volatile frsqrte_link = &ppc_frsqrte;
+    (void)fres_link;
+    (void)frsqrte_link;
     if (nsmbu_private_game_link_metadata() != 0) return 30;
 #endif
     return 0;
