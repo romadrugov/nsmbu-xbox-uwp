@@ -23,6 +23,25 @@ typedef struct NSMBUBootTableStatus {
 // Negative errors mean invalid metadata (-1), allocation/table failure (-2),
 // or unresolved guest entrypoint (-3). Caller must shut down when done.
 int nsmbu_bootfirst_inspect_table(NSMBUBootTableStatus* report);
+// R5B: initialize and inspect a real Cpu struct, without ever executing
+// the game. Stack guest pages must be committed by the caller beforehand.
+typedef struct NSMBUR5CpuSnapshot {
+    uint32_t entry;
+    uint32_t stack_base;
+    uint32_t stack_size;
+    uint32_t r1;
+    uint32_t r2;
+    uint32_t r13;
+    uint32_t lr;
+    uint32_t core;
+    uint32_t argc;
+    uint32_t argv;
+} NSMBUR5CpuSnapshot;
+// Returns 0 if native entry, stack and SDA regs are prepared; never jumps
+// into Nintendo code. Negative values denote unsafe or missing prerequisites.
+int nsmbu_r5_prepare_cpu(uint32_t entry, uint32_t stack_base,
+                         uint32_t stack_size, uint32_t sda_base,
+                         uint32_t sda2_base, NSMBUR5CpuSnapshot* output);
 void nsmbu_bootfirst_shutdown_dispatch(void);
 uint32_t nsmbu_bootfirst_trace_count(void);
 #ifdef __cplusplus
