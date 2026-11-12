@@ -10,7 +10,12 @@ constexpr uint32_t kShtSymtab = 2u;
 constexpr uint32_t kShtRplImports = 0x80000002u;
 constexpr size_t kRelaRecordBytes = 12u;
 constexpr size_t kSymbolBytes = 16u;
-constexpr uint64_t kMaxRelocations = 512000ull;
+// The 512K *record* limit was too small for the verified USA_V0 RPX.
+// Bound the sum of decoded RELA *bytes* instead: each section is already
+// bounded to 32 MiB by decode_section(), and this 96 MiB total budget
+// permits three maximum-sized RELA sections without unbounded allocation.
+// Sections are decoded/processed one by one and not retained together.
+constexpr uint64_t kMaxRelaDecodedBytes = 96ull * 1024ull * 1024ull;
 
 uint32_t be32(const uint8_t* p) {
     return (uint32_t(p[0]) << 24u) |
@@ -63,6 +68,7 @@ bool r5d_audit_relocations(
     report.r2_window_staged_bytes = r5d_staged_sda_window_bytes(sda2, staged);
 
     size_t cachedSymbolIndex = image.sections.size();
+    uint64_t relaDecodedBytes = 0;
     std::vector<uint8_t> symbolTable;
     for (const auto& section : image.sections) {
         if (section.type == kShtRel) {
@@ -92,14 +98,20 @@ bool r5d_audit_relocations(
             cachedSymbolIndex = section.link;
         }
 
+        // Check the inspected decoded size BEFORE decompressing. The total
+        // 96-MiB budget also limits CPU time in the bounded record scan.
+        if (section.memory_bytes > kMaxRelaDecodedBytes - relaDecodedBytes)
+            return fail(error, "R5D decoded RELA bytes exceed 96 MiB audit budget");
         std::vector<uint8_t> rela;
         if (!decode_section(file, file_size, section, rela, decodeError))
             return fail(error, "R5D RELA section decoding failed");
         if (rela.size() % kRelaRecordBytes != 0)
             return fail(error, "R5D RELA payload not a multiple of 12 bytes");
+        // The byte limit is independent of file compression ratio.
+        if (rela.size() > kMaxRelaDecodedBytes - relaDecodedBytes)
+            return fail(error, "R5D decoded RELA bytes exceed 96 MiB audit budget");
+        relaDecodedBytes += rela.size();
         const uint64_t count = rela.size() / kRelaRecordBytes;
-        if (count > kMaxRelocations || report.records > kMaxRelocations - count)
-            return fail(error, "R5D total RELA count exceeds 512K safe limit");
 
         R5DRelocSlice slice{};
         slice.name = section.name;
