@@ -188,6 +188,16 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
             return;
         }
         log_image(image, log, "LOCAL");
+        // A linked native USA_V0 game must only stage its identical USA_V0 RPX.
+        // Other recognized versions are not interchangeable with its C code.
+        if (requiredBuild && (!known || std::strcmp(known, requiredBuild) != 0)) {
+            log("[rpx/R5] LOCAL staging REFUSED: RPX SHA256 does not match the linked game's required build");
+            return;
+        }
+        if (requiredBuild && image.entry != 0x02AA2E50u) {
+            log("[rpx/R5] LOCAL staging REFUSED: RPX entrypoint does not match USA_V0 recompilation");
+            return;
+        }
         // Only byte-identical, known builds may be staged in this experiment.
         // Never execute source PowerPC from these pages; game function
         // recompilation and HLE imports are not integrated yet.
