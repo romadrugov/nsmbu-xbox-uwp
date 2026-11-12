@@ -4,6 +4,9 @@
 #if defined(NSMBU_R5_CPU_BOOTSTRAP)
 #include "core/r5_startup_metadata.h"
 #include "bootfirst_api.h"
+#if defined(NSMBU_R5C_LINK_AUDIT)
+#include "core/r5c_link_audit.h"
+#endif
 #endif
 #include "generated/PublicRpxFixture.h"
 #include <windows.h>
@@ -292,6 +295,40 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                                     cpu.fpscr, cpu.gqr2, cpu.gqr3, cpu.gqr4, cpu.gqr5);
                                 log(detail);
                                 log("[rpx/R5B] CPU BOOTSTRAP PASS: stack and real Cpu register state prepared");
+#if defined(NSMBU_R5C_LINK_AUDIT)
+                                const auto a = xboxrpx::r5c_audit(
+                                    image, sections, cpu.r13, cpu.r2);
+                                sprintf_s(detail,
+                                    "[rpx/R5C] section audit: allocated=%u staged=%u "
+                                    "not-staged=%u not-staged-bytes=%llu reloc-candidates=%u reloc-bytes=%llu",
+                                    a.allocated_sections, a.staged_sections,
+                                    a.unstaged_allocated,
+                                    static_cast<unsigned long long>(a.unstaged_allocated_bytes),
+                                    a.relocation_candidate_sections,
+                                    static_cast<unsigned long long>(a.relocation_candidate_bytes));
+                                log(detail);
+                                sprintf_s(detail,
+                                    "[rpx/R5C] coverage: entry=%08X staged=%u "
+                                    "r2=%08X staged=%u r13=%08X staged=%u",
+                                    cpu.entry, unsigned(a.entry_staged),
+                                    cpu.r2, unsigned(a.sda2_staged),
+                                    cpu.r13, unsigned(a.sda_staged));
+                                log(detail);
+                                if (!a.sda_staged || !a.sda2_staged) {
+                                    log("[rpx/R5C] FIRST EXECUTION BLOCKED: SDA base outside staged sections; classify memory regions first");
+                                }
+                                for (const auto& missing : image.sections) {
+                                    if (!missing.allocated() || !missing.memory_bytes ||
+                                        xboxrpx::r5c_section_staged(missing, sections))
+                                        continue;
+                                    sprintf_s(detail,
+                                        "[rpx/R5C] allocated not-staged: %.64s type=%08X flags=%08X addr=%08X bytes=%u",
+                                        missing.name.c_str(), missing.type,
+                                        missing.flags, missing.address, missing.memory_bytes);
+                                    log(detail);
+                                }
+                                log("[rpx/R5C] Candidate relocation sections are metadata only: no relocations applied");
+#endif
                                 log("[rpx/R5B] EXECUTION STILL DISABLED: imports, relocations and Cafe OS not initialized");
                             } else {
                                 log("[rpx/R5B] CPU BOOTSTRAP FAILED: unsafe startup configuration");

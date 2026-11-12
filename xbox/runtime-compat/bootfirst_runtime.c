@@ -170,6 +170,34 @@ int nsmbu_r5_prepare_cpu(uint32_t entry, uint32_t stack_base,
     return 0;
 }
 
+// The recompiler generates weak default import wrappers that abort through
+// hle_unimplemented. Therefore a registered pointer does NOT mean the OS
+// service is implemented. This audit never invokes any imported function.
+int nsmbu_r5_audit_imports(NSMBUR5ImportAudit* output) {
+    if (!output) return -1;
+    memset(output, 0, sizeof(*output));
+    if (g_recomp_import_count > 20000u) return -2;
+    output->total = g_recomp_import_count;
+    for (uint32_t i = 0; i < g_recomp_import_count; ++i) {
+        const RecompImport* imp = &g_recomp_imports[i];
+        if (imp->is_func) {
+            output->function_imports++;
+            if (imp->fn) output->function_pointers++;
+            if (imp->fn && headless_dispatch_lookup(imp->slot) == imp->fn)
+                output->function_dispatch_entries++;
+        } else {
+            output->data_imports++;
+            if (imp->addr >= 0xC1000000u && imp->addr < 0xC2000000u &&
+                (imp->addr & 0xFFFu) == 0u) {
+                output->data_virtual_slots++;
+                if (!output->first_data_addr || imp->addr < output->first_data_addr)
+                    output->first_data_addr = imp->addr;
+            }
+        }
+    }
+    return 0;
+}
+
 void nsmbu_bootfirst_shutdown_dispatch(void) {
     headless_dispatch_reset();
 }

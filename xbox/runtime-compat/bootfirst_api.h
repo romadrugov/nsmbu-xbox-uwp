@@ -47,6 +47,18 @@ typedef struct NSMBUR5CpuSnapshot {
 int nsmbu_r5_prepare_cpu(uint32_t entry, uint32_t stack_base,
                          uint32_t stack_size, uint32_t sda_base,
                          uint32_t sda2_base, NSMBUR5CpuSnapshot* output);
+// R5C: purely descriptive diagnostics. Non-null pointers include weak
+// hle_unimplemented defaults and MUST NOT be considered implemented Cafe OS.
+typedef struct NSMBUR5ImportAudit {
+    uint32_t total;
+    uint32_t function_imports;
+    uint32_t function_pointers;
+    uint32_t function_dispatch_entries;
+    uint32_t data_imports;
+    uint32_t data_virtual_slots;
+    uint32_t first_data_addr;
+} NSMBUR5ImportAudit;
+int nsmbu_r5_audit_imports(NSMBUR5ImportAudit* output);
 void nsmbu_bootfirst_shutdown_dispatch(void);
 uint32_t nsmbu_bootfirst_trace_count(void);
 #ifdef __cplusplus

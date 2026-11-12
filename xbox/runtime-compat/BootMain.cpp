@@ -36,7 +36,7 @@ void OpenLog() noexcept {
     try {
         auto folder = Windows::Storage::ApplicationData::Current->LocalFolder;
         std::wstring path(folder->Path->Data());
-        path += L"\\nsmbu_r5b_cpu_bootstrap.txt";
+        path += L"\\nsmbu_r5c_link_readiness.txt";
         g_logFile = CreateFile2(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
                                 CREATE_ALWAYS, nullptr);
     } catch (...) {
@@ -100,9 +100,19 @@ void RunPreflight() {
         Log("R4 STOP: native entrypoint mapping unavailable");
     } else {
         Log("R4 PREFLIGHT PASS: guest VM + entire native function table + entrypoint mapping");
+        NSMBUR5ImportAudit audit = {};
+        const int auditResult = nsmbu_r5_audit_imports(&audit);
+        sprintf_s(line, "R5C import audit: status=%d total=%u function=%u fn-pointers=%u "
+                  "dispatch-mapped=%u data=%u data-virtual-slots=%u first-data=%08X",
+                  auditResult, audit.total, audit.function_imports,
+                  audit.function_pointers, audit.function_dispatch_entries,
+                  audit.data_imports, audit.data_virtual_slots, audit.first_data_addr);
+        Log(line);
+        Log("R5C WARNING: native import pointers include generated WEAK "
+            "hle_unimplemented wrappers; mapped does NOT mean Cafe OS implemented");
     }
     if (result == 0 && table.entry_registered) {
-        Log("R5B PHASE: stage verified RPX, then prepare native Cpu and guest stack; no entry call");
+        Log("R5C PHASE: verify RPX/CPU, audit un-staged memory, relocation candidates and imports");
         Log("R5 inputs: LocalState/red-pro2.rpx; not embedded in AppX or GitHub");
         xboxrpxprobe::run(guest, &Log, "USA_V0");
         Log("R5B NOTE: guest Cpu prepared only after verified RPX staging; no relocations or Cafe OS");
@@ -142,8 +152,8 @@ public:
             Log("R4 unknown native/WinRT exception");
         }
         // Deliberately stay visible for diagnostics; a black screen is not
-        // gameplay. Read LocalState/nsmbu_r5b_cpu_bootstrap.txt for results.
-        Log("R5B diagnostic shell is idle; close app to exit");
+        // gameplay. Read LocalState/nsmbu_r5c_link_readiness.txt for results.
+        Log("R5C diagnostic shell is idle; close app to exit");
         while (!closed_) {
             window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessOneAndAllPending);
         }
