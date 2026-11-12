@@ -12,6 +12,8 @@
 #include "core/xbox_guest_vm.h"
 #include "bootfirst_api.h"
 #include "RpxProbe.h"
+#include "BootPreview.h"
+#include <string>
 
 using namespace Windows::ApplicationModel::Core;
 using namespace Windows::UI::Core;
@@ -36,7 +38,7 @@ void OpenLog() noexcept {
     try {
         auto folder = Windows::Storage::ApplicationData::Current->LocalFolder;
         std::wstring path(folder->Path->Data());
-        path += L"\\nsmbu_r5e_boot_sections.txt";
+        path += L"\\nsmbu_r5f_visual_preview.txt";
         g_logFile = CreateFile2(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
                                 CREATE_ALWAYS, nullptr);
     } catch (...) {
@@ -151,9 +153,26 @@ public:
         } catch (...) {
             Log("R4 unknown native/WinRT exception");
         }
-        // Deliberately stay visible for diagnostics; a black screen is not
-        // gameplay. Read LocalState/nsmbu_r5e_boot_sections.txt for results.
-        Log("R5E diagnostic shell is idle; close app to exit");
+        // R5F: draw a bounded owner-local PNG using the GPU path that was
+        // already demonstrated by the separate Xbox D3D12 smoke application.
+        // No guest game function is called by the renderer.
+        std::unique_ptr<nsmbuvisual::Preview> visual;
+        try {
+            const auto folder = Windows::Storage::ApplicationData::Current->LocalFolder;
+            std::wstring imagePath(folder->Path->Data());
+            imagePath += L"\\nsmbu_preview.png";
+            visual.reset(new nsmbuvisual::Preview(
+                reinterpret_cast<IUnknown*>(window_), imagePath.c_str(), &Log));
+            visual->present();
+        } catch (const std::exception& error) {
+            Log("R5F GPU preview failed (R5E audit still usable):");
+            Log(error.what());
+        } catch (Platform::Exception^ ex) {
+            LogStatus("R5F GPU WinRT exception", int(ex->HResult));
+        } catch (...) {
+            Log("R5F GPU preview failed with unknown exception");
+        }
+        Log("R5F visual preview idle; image is not a running game");
         while (!closed_) {
             window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessOneAndAllPending);
         }
