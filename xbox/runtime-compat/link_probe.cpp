@@ -22,6 +22,8 @@ extern "C" int nsmbu_private_game_link_metadata();
 // Do not pull the clang-only PPC header into an MSVC/C++/CX translation unit.
 extern "C" double ppc_fres(double);
 extern "C" double ppc_frsqrte(double);
+extern "C" int nsmbu_bootfirst_init_dispatch(void);
+extern "C" uint32_t nsmbu_bootfirst_trace_count(void);
 #endif
 
 int main() {
@@ -39,6 +41,10 @@ int main() {
     auto* volatile frsqrte_link = &ppc_frsqrte;
     (void)fres_link;
     (void)frsqrte_link;
+    auto* volatile dispatch_init_link = &nsmbu_bootfirst_init_dispatch;
+    auto* volatile trace_count_link = &nsmbu_bootfirst_trace_count;
+    (void)dispatch_init_link;
+    (void)trace_count_link;
     if (nsmbu_private_game_link_metadata() != 0) return 30;
 #endif
     return 0;
