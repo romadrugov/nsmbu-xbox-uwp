@@ -7,7 +7,8 @@ namespace {
 constexpr uint64_t kGuestLimit = 0x100000000ull;
 constexpr uint64_t kMaxStaged = 48ull * 1024ull * 1024ull;
 
-bool chosen(const std::string& name) {
+bool chosen(const std::string& name, bool bootExtra) {
+    if (bootExtra && (name == ".syscall" || name == ".module_id")) return true;
     return name == ".text" || name == ".rodata" || name == ".rodata1" ||
            name == ".data" || name == ".data1" ||
            name == ".bss" || name == ".sdata" || name == ".sdata2" ||
@@ -31,14 +32,15 @@ uint32_t crc32(const uint8_t* bytes, size_t count) {
 }
 
 bool prepare_sections(const uint8_t* file, size_t file_size, const Image& image,
-                      std::vector<PreparedSection>& result, std::string& error) {
+                      std::vector<PreparedSection>& result, std::string& error,
+                      bool includeBootSections) {
     if (!file || image.sections.empty())
         return fail(error, "RPX staging requires a previously validated image");
     std::vector<PreparedSection> staged;
     uint64_t totalBytes = 0;
     bool hasText = false;
     for (const Section& section : image.sections) {
-        if (!chosen(section.name)) continue;
+        if (!chosen(section.name, includeBootSections)) continue;
         if (!section.allocated() || section.memory_bytes == 0)
             return fail(error, "requested RPX section is not allocated or has zero size");
         if (section.type != 1u && section.type != 8u)
@@ -78,6 +80,24 @@ bool prepare_sections(const uint8_t* file, size_t file_size, const Image& image,
         return fail(error, "RPX staging requires allocated executable .text");
     result.swap(staged); // All checks passed; caller output unchanged otherwise.
     error.clear();
+    return true;
+}
+
+bool boot_mem2_span(const std::vector<PreparedSection>& sections,
+                    uint32_t& first, uint32_t& bytes) {
+    uint64_t lo = 0x100000000ull, hi = 0;
+    for (const auto& s : sections) {
+        if (s.address < 0x10000000u || s.address >= 0x50000000u) continue;
+        const uint64_t end = uint64_t(s.address) + s.bytes.size();
+        if (end > 0x50000000ull || end <= s.address) return false;
+        lo = std::min(lo, uint64_t(s.address));
+        hi = std::max(hi, end);
+    }
+    // Same boot-time MEM2 initialization as the desktop loader, but bounded
+    // to 32 MiB to reject any suspicious contiguous span on UWP.
+    if (hi <= lo || hi - lo > 32ull * 1024ull * 1024ull) return false;
+    first = uint32_t(lo);
+    bytes = uint32_t(hi - lo);
     return true;
 }
 } // namespace xboxrpx
