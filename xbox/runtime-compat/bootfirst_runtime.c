@@ -119,6 +119,47 @@ int nsmbu_bootfirst_inspect_table(NSMBUBootTableStatus* report) {
     return report->entry_registered ? 0 : -3;
 }
 
+// R5B diagnostic Cpu instance. Uses the exact ABI the generated PPC
+// functions expect, but **does not** call any generated function.
+static Cpu s_r5_cpu;
+int nsmbu_r5_prepare_cpu(uint32_t entry, uint32_t stack_base,
+                         uint32_t stack_size, uint32_t sda_base,
+                         uint32_t sda2_base, NSMBUR5CpuSnapshot* output) {
+    if (!output) return -1;
+    memset(output, 0, sizeof(*output));
+    if (!entry || entry != g_recomp_entry_point ||
+        !headless_dispatch_lookup(entry)) return -2;
+    if (stack_base != 0x60000000u || stack_size < 0x00100000u ||
+        stack_size > 0x01000000u || (stack_size & 0xFFFFu) != 0u)
+        return -3;
+    if (sda_base < 0x10000000u || sda_base >= 0x50000000u ||
+        sda2_base < 0x10000000u || sda2_base >= 0x50000000u ||
+        ((sda_base | sda2_base) & 3u))
+        return -4;
+    const uint32_t top = stack_base + stack_size;
+    memset(&s_r5_cpu, 0, sizeof(s_r5_cpu));
+    s_r5_cpu.pc = entry;
+    s_r5_cpu.core = 1;  // matches upstream threads::init_cpu
+    s_r5_cpu.r[1] = (top - 0x20u) & ~15u;
+    s_r5_cpu.r[2] = sda2_base;
+    s_r5_cpu.r[13] = sda_base;
+    s_r5_cpu.r[3] = 0;  // argc=0; real startup argv not prepared yet
+    s_r5_cpu.r[4] = 0;  // argv=null
+    s_r5_cpu.lr = 0;
+    s_r5_cpu.res_addr = 0xFFFFFFFFu;
+    output->entry = s_r5_cpu.pc;
+    output->stack_base = stack_base;
+    output->stack_size = stack_size;
+    output->r1 = s_r5_cpu.r[1];
+    output->r2 = s_r5_cpu.r[2];
+    output->r13 = s_r5_cpu.r[13];
+    output->lr = s_r5_cpu.lr;
+    output->core = s_r5_cpu.core;
+    output->argc = s_r5_cpu.r[3];
+    output->argv = s_r5_cpu.r[4];
+    return 0;
+}
+
 void nsmbu_bootfirst_shutdown_dispatch(void) {
     headless_dispatch_reset();
 }
