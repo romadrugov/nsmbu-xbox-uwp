@@ -104,7 +104,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $out = Join-Path $env:RUNNER_TEMP 'nsmbu-public-first-link'
-          & '.\tools\xbox\try_private_game_link.ps1' -PublicFixture -OutputDir $out -BuildBootShell -EnableR6Leaf
+          & '.\tools\xbox\try_private_game_link.ps1' -PublicFixture -OutputDir $out -BuildBootShell -EnableR6Leaf -EnableR7Entry
           if ($LASTEXITCODE -ne 0) { throw 'Public synthetic archive did not pass the private-first-link pipeline' }
           $data = Get-Content (Join-Path $out 'link-summary.json') -Raw | ConvertFrom-Json
           if (-not $data.linked_uwp_x64_executable -or
@@ -134,7 +134,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $generated = Join-Path $env:RUNNER_TEMP 'nsmbu-xbox-public-ppc-fixture/gen'
           $output = Join-Path $env:RUNNER_TEMP 'nsmbu-public-full-coff'
-          py -3 tools/xbox/private_compile_all.py --public-fixture --generated $generated --out $output
+          py -3 tools/xbox/private_compile_all.py --public-fixture --generated $generated --out $output --r7-guest-budget
           if ($LASTEXITCODE -ne 0) { throw 'Public C-to-MSVC COFF archive script failed' }
           $data = Get-Content (Join-Path $output 'compile-summary.json') -Raw | ConvertFrom-Json
           if ($data.mode -ne 'PUBLIC_FIXTURE' -or
