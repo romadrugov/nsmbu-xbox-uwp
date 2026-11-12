@@ -219,7 +219,11 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
             log("[rpx/0.7] Phase 1: decode eligible sections to CPU buffers (no guest writes)");
             std::vector<xboxrpx::PreparedSection> sections;
             if (!xboxrpx::prepare_sections(data.data(), data.size(), image,
-                                           sections, error)) {
+                                           sections, error
+#if defined(NSMBU_R5E_BOOT_PARITY)
+                                           , requiredBuild != nullptr
+#endif
+                                           )) {
                 log("[rpx/0.7] LOCAL section preparation FAILED; no guest writes");
                 log(error.c_str());
             } else {
@@ -234,7 +238,30 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                 size_t completed = 0;
                 size_t written = 0;
                 bool mappingOk = true;
+#if defined(NSMBU_R5E_BOOT_PARITY)
+                if (requiredBuild) {
+                    uint32_t mem2Start = 0, mem2Bytes = 0;
+                    if (!xboxrpx::boot_mem2_span(sections, mem2Start, mem2Bytes)) {
+                        mappingOk = false;
+                        log("[rpx/R5E] MEM2 span REFUSED: missing or exceeds 32 MiB safe budget");
+                    } else if (!guest.commit(mem2Start, mem2Bytes)) {
+                        mappingOk = false;
+                        sprintf_s(detail,
+                            "[rpx/R5E] MEM2 contiguous commit FAILED Win32=%lu",
+                            static_cast<unsigned long>(guest.last_error()));
+                        log(detail);
+                    } else {
+                        std::memset(guest.ptr(mem2Start), 0, mem2Bytes);
+                        sprintf_s(detail,
+                            "[rpx/R5E] MEM2 contiguous zero-fill PASS: first=%08X bytes=%u",
+                            mem2Start, mem2Bytes);
+                        log(detail);
+                        log("[rpx/R5E] .syscall + .module_id opt-in stages alongside game data");
+                    }
+                }
+#endif
                 for (const auto& sec : sections) {
+                    if (!mappingOk) break;
                     if (!guest.commit(sec.address, sec.bytes.size())) {
                         sprintf_s(detail,
                             "[rpx/0.7] guest commit FAILED: %s addr=%08X len=%zu Win32=%lu",
