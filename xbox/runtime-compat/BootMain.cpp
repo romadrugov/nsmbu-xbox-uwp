@@ -36,7 +36,7 @@ void OpenLog() noexcept {
     try {
         auto folder = Windows::Storage::ApplicationData::Current->LocalFolder;
         std::wstring path(folder->Path->Data());
-        path += L"\\nsmbu_r5d_relocation_audit.txt";
+        path += L"\\nsmbu_r5e_boot_sections.txt";
         g_logFile = CreateFile2(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
                                 CREATE_ALWAYS, nullptr);
     } catch (...) {
@@ -152,7 +152,7 @@ public:
             Log("R4 unknown native/WinRT exception");
         }
         // Deliberately stay visible for diagnostics; a black screen is not
-        // gameplay. Read LocalState/nsmbu_r5d_relocation_audit.txt for results.
+        // gameplay. Read LocalState/nsmbu_r5e_boot_sections.txt for results.
         Log("R5D diagnostic shell is idle; close app to exit");
         while (!closed_) {
             window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessOneAndAllPending);
