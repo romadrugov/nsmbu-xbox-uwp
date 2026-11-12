@@ -162,6 +162,11 @@ int nsmbu_r5_prepare_cpu(uint32_t entry, uint32_t stack_base,
     output->core = s_r5_cpu.core;
     output->argc = s_r5_cpu.r[3];
     output->argv = s_r5_cpu.r[4];
+    output->fpscr = s_r5_cpu.fpscr;
+    output->gqr2 = s_r5_cpu.gqr[2];
+    output->gqr3 = s_r5_cpu.gqr[3];
+    output->gqr4 = s_r5_cpu.gqr[4];
+    output->gqr5 = s_r5_cpu.gqr[5];
     return 0;
 }
 
