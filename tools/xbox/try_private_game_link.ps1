@@ -82,6 +82,27 @@ $mathArgs = @('/nologo','/c','/O1','/MD','/clang:-std=c11',
 & $clang @mathArgs *> (Join-Path $dest 'espresso-fp.log')
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $mathObj)) { throw 'Espresso FP compile failed; inspect only LOCAL espresso-fp.log' }
 
+# Native first-boot subset: the already tested table dispatcher plus an
+# explicit fail-fast diagnostic runtime. The same author-created code links
+# both PUBLIC fixture and PRIVATE full game, without executing game code.
+$headlessObj = Join-Path $dest 'headless_dispatch.obj'
+$bootObj = Join-Path $dest 'bootfirst_runtime.obj'
+foreach ($unit in @(
+    @{ Source = 'runtime/src/core/headless_dispatch.c'; Out = $headlessObj; Log = 'headless-dispatch.log' },
+    @{ Source = 'xbox/runtime-compat/bootfirst_runtime.c'; Out = $bootObj; Log = 'bootfirst-runtime.log' }
+)) {
+  $args = @('/nologo','/c','/O1','/MD','/clang:-std=c11',
+    '/DWINAPI_FAMILY=WINAPI_FAMILY_APP',
+    "/I$(Join-Path $root 'runtime/include')",
+    "/I$(Join-Path $root 'runtime/src')",
+    "/Fo$($unit.Out)",
+    (Join-Path $root $unit.Source))
+  & $clang @args *> (Join-Path $dest $unit.Log)
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $unit.Out)) {
+    throw "Boot-first source compile failed: $($unit.Source); private log: $($unit.Log)"
+  }
+}
+
 $compatOut = Join-Path $dest 'compat'
 $compatInt = Join-Path $dest 'compat-int'
 $appOut = Join-Path $dest 'app'
@@ -111,7 +132,9 @@ $extra = @("/p:OutDir=$appOut/","/p:IntDir=$appInt/",
  "/p:NSMBUCompatArchive=$compatLib",
  "/p:NSMBUPrivateArchive=$archive",
  "/p:NSMBUPrivateBridgeObj=$bridge",
- "/p:NSMBUMathObject=$mathObj")
+ "/p:NSMBUMathObject=$mathObj",
+ "/p:NSMBUHeadlessDispatchObj=$headlessObj",
+ "/p:NSMBUBootFirstRuntimeObj=$bootObj")
 & $msbuild $project @common @extra *> $linkLog
 $linkExit = $LASTEXITCODE
 # MSBuild may place the EXE in OutDir/ProjectName rather than directly in OutDir.
