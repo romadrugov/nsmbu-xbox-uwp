@@ -54,3 +54,4 @@ bool read_startup_metadata(const uint8_t* file, size_t length,
     error.clear();
     return true;
 }
+} // namespace xboxrpx
