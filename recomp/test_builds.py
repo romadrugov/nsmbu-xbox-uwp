@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import builds
@@ -216,6 +217,19 @@ class Hooks(unittest.TestCase):
             self.assertEqual(
                 builds.hook_on_differing(build, False, 0x0252D9C0, False, True), "warn")
             self.assertEqual(builds.differing_hook(False, False, True), "warn")
+
+    def test_hook_free_mode_is_explicit_and_leaves_default_intact(self):
+        with mock.patch.dict(os.environ, {"NSMBU_RECOMP_DISABLE_HOOKS": "1"}):
+            self.assertEqual(builds.hook_files(), [])
+            entries, skipped = builds.read_hooks(
+                builds.hook_files(), builds.by_name("USA_V0"))
+            self.assertEqual(entries, [])
+            self.assertEqual(skipped, [])
+            self.assertEqual(builds.hook_inputs_stamp(), "")
+        with mock.patch.dict(os.environ, {"NSMBU_RECOMP_DISABLE_HOOKS": "0"}):
+            self.assertTrue(builds.hook_files())
+            self.assertTrue(builds.read_hooks(
+                builds.hook_files(), builds.by_name("USA_V0"))[0])
 
     def test_hook_files_in_folder_with_brackets(self):
         with tempfile.TemporaryDirectory() as temporary:

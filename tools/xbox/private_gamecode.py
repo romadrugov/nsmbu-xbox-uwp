@@ -105,16 +105,20 @@ def prepare(args):
     generated = dest / "generated"
     log = dest / "recompile.log"
     command = [sys.executable, str(RECOMP), str(rpx), str(generated), "--jobs", str(args.jobs)]
-    env = dict(os.environ, NSMBU_RECOMP_MOD_HOOKS="0", PYTHONDONTWRITEBYTECODE="1")
+    env = dict(os.environ, NSMBU_RECOMP_MOD_HOOKS="0",
+               NSMBU_RECOMP_DISABLE_HOOKS="1" if args.hooks == "none" else "0",
+               PYTHONDONTWRITEBYTECODE="1")
     print("USA_V0 SHA-256 confirmed. All game-derived files stay LOCAL.")
     print("Generating local source in:", generated, flush=True)
+    print("Hook mode:", args.hooks, flush=True)
     with log.open("w", encoding="utf-8") as output:
         status = subprocess.call(command, env=env, stdout=output, stderr=subprocess.STDOUT)
     if status:
         raise RuntimeError("recomp failed (exit %d); inspect LOCAL log %s" % (status, log))
     info = inspect_generated(generated)
     info.update({"build": build.name, "rpx_sha256": sha,
-                 "build_verified_by_sha256": True, "source_data_kept_local": True})
+                 "build_verified_by_sha256": True, "source_data_kept_local": True,
+                 "hook_mode": args.hooks})
     save_summary(dest / "summary.json", info)
     print("Functions:", info["function_count"], "Imports:", info["import_count"],
           "C files:", info["code_files"], "Source bytes:", info["code_bytes"])
@@ -129,6 +133,8 @@ def main():
     gen.add_argument("--rpx", required=True)
     gen.add_argument("--out", required=True)
     gen.add_argument("--jobs", type=int, default=4)
+    gen.add_argument("--hooks", choices=("default", "none"), default="default",
+                     help="default: apply upstream desktop hooks; none: original PPC code for Xbox boot-first")
     check = commands.add_parser("inspect", help="metadata-only scan of existing generated C")
     check.add_argument("--generated", required=True)
     check.add_argument("--summary", help="optional output file OUTSIDE repository")
