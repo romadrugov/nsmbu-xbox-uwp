@@ -135,7 +135,7 @@ list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "mod_lua_test_stubs\\.cpp$")
 list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "headless_dispatch\\.c$")
 # Xbox UWP-only guest VM and RPX smoke modules are explicitly built by Xbox MSBuild.
 # Do not glob them into the normal desktop, Linux or Android CMake runtime.
-list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "/(xbox_guest_vm|rpx_inspect|rpx_stage|r5_startup_metadata|r5c_link_audit)\\.cpp$")
+list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "/(xbox_guest_vm|rpx_inspect|rpx_stage|r5_startup_metadata|r5c_link_audit|r5d_relocation_audit)\\.cpp$")
 list(APPEND RUNTIME_SOURCES runtime/src/platform/perf_hint.cpp runtime/src/platform/touch_pad.cpp runtime/src/gfx/render_prof.cpp runtime/src/gfx/screenshot.cpp)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(NSMBU_GUEST_STUBS ${CMAKE_BINARY_DIR}/generated/nsmbu_guest_stubs.c)
@@ -716,6 +716,11 @@ add_executable(r5c_link_audit_test runtime/test/r5c_link_audit_test.cpp
     runtime/src/core/r5c_link_audit.cpp)
 target_include_directories(r5c_link_audit_test PRIVATE runtime/src)
 add_test(NAME r5c_link_audit COMMAND r5c_link_audit_test)
+
+add_executable(r5d_relocation_audit_test runtime/test/r5d_relocation_audit_test.cpp
+    runtime/src/core/r5d_relocation_audit.cpp runtime/src/core/rpx_inspect.cpp)
+target_include_directories(r5d_relocation_audit_test PRIVATE runtime/src)
+add_test(NAME r5d_relocation_audit COMMAND r5d_relocation_audit_test)
 
 
 if(NSMBU_HAS_VULKAN)
