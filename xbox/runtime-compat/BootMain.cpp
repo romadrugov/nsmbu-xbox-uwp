@@ -112,7 +112,7 @@ void RunPreflight() {
             "hle_unimplemented wrappers; mapped does NOT mean Cafe OS implemented");
     }
     if (result == 0 && table.entry_registered) {
-        Log("R5D PHASE: verify RPX/CPU, import tables, and classify unmodified RELA records");
+        Log("R5E PHASE: stage desktop boot sections, zero MEM2 and audit RPX/CPU/RELA");
         Log("R5 inputs: LocalState/red-pro2.rpx; not embedded in AppX or GitHub");
         xboxrpxprobe::run(guest, &Log, "USA_V0");
         Log("R5B NOTE: guest Cpu prepared only after verified RPX staging; no relocations or Cafe OS");
@@ -153,7 +153,7 @@ public:
         }
         // Deliberately stay visible for diagnostics; a black screen is not
         // gameplay. Read LocalState/nsmbu_r5e_boot_sections.txt for results.
-        Log("R5D diagnostic shell is idle; close app to exit");
+        Log("R5E diagnostic shell is idle; close app to exit");
         while (!closed_) {
             window_->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessOneAndAllPending);
         }
