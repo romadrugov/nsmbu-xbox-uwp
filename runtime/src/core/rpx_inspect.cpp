@@ -42,7 +42,7 @@ bool fail(std::string& reason, const char* msg) {
     return false;
 }
 struct Raw {
-    uint32_t name, type, flags, addr, off, file_size, align;
+    uint32_t name, type, flags, addr, off, file_size, link, info, align, entsize;
 };
 } // namespace
 
@@ -148,7 +148,7 @@ bool inspect(const uint8_t* bytes, size_t count,
     for (unsigned i=0; i<shnum; ++i) {
         const uint8_t* p = bytes + shoff + size_t(i)*shentsize;
         Raw r{u32(p),u32(p+4),u32(p+8),u32(p+12),u32(p+16),
-              u32(p+20),u32(p+32)};
+              u32(p+20),u32(p+24),u32(p+28),u32(p+32),u32(p+36)};
         if (r.type != kNoBits && !range(count, r.off, r.file_size))
             return fail(error, "section payload outside file");
         if (r.align && (r.align & (r.align - 1u)))
@@ -215,6 +215,9 @@ bool inspect(const uint8_t* bytes, size_t count,
         sec.address = r.addr;
         sec.file_offset = r.off;
         sec.file_bytes = r.file_size;
+        sec.link = r.link;
+        sec.info = r.info;
+        sec.entry_bytes = r.entsize;
         sec.compressed = (r.flags & kZlibFlag) != 0u && r.type != kNoBits;
         sec.memory_bytes = r.file_size;
         if (sec.compressed) {

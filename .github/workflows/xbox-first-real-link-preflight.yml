@@ -23,6 +23,9 @@ on:
       - "runtime/src/core/r5c_link_audit.cpp"
       - "runtime/src/core/r5c_link_audit.h"
       - "runtime/test/r5c_link_audit_test.cpp"
+      - "runtime/src/core/r5d_relocation_audit.h"
+      - "runtime/src/core/r5d_relocation_audit.cpp"
+      - "runtime/test/r5d_relocation_audit_test.cpp"
       - "runtime/test/r5_startup_metadata_test.cpp"
       - "CMakeLists.txt"
       - "tools/xbox/package_boot_preflight.ps1"
@@ -51,6 +54,9 @@ on:
       - "runtime/src/core/r5c_link_audit.cpp"
       - "runtime/src/core/r5c_link_audit.h"
       - "runtime/test/r5c_link_audit_test.cpp"
+      - "runtime/src/core/r5d_relocation_audit.h"
+      - "runtime/src/core/r5d_relocation_audit.cpp"
+      - "runtime/test/r5d_relocation_audit_test.cpp"
       - "runtime/test/r5_startup_metadata_test.cpp"
       - "CMakeLists.txt"
       - "tools/xbox/package_boot_preflight.ps1"
@@ -68,6 +74,27 @@ jobs:
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
+      - name: Test R5D crafted PPC ELF relocations and malformed metadata (PUBLIC only)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $install = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $install) { throw 'MSVC toolchain unavailable for R5D synthetic test' }
+          $devcmd = Join-Path $install 'Common7/Tools/VsDevCmd.bat'
+          $include = Join-Path $env:GITHUB_WORKSPACE 'runtime/src'
+          $test = Join-Path $env:GITHUB_WORKSPACE 'runtime/test/r5d_relocation_audit_test.cpp'
+          $audit = Join-Path $env:GITHUB_WORKSPACE 'runtime/src/core/r5d_relocation_audit.cpp'
+          $inspect = Join-Path $env:GITHUB_WORKSPACE 'runtime/src/core/rpx_inspect.cpp'
+          $exe = Join-Path $env:RUNNER_TEMP 'r5d_public_relocation_test.exe'
+          $line = 'call "' + $devcmd + '" -arch=amd64 -host_arch=amd64 >nul && ' +
+            'cl.exe /nologo /std:c++17 /EHsc /I"' + $include + '" "' + $test +
+            '" "' + $audit + '" "' + $inspect + '" /Fe:"' + $exe +
+            '" && "' + $exe + '"'
+          & cmd.exe /d /c $line
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $exe)) {
+            throw 'R5D handcrafted RELA/parser regression test FAILED'
+          }
       - name: Exercise identical UWP link path with authored three-instruction PPC fixture
         shell: pwsh
         run: |

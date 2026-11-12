@@ -11,6 +11,9 @@ struct Section {
     std::string name;
     uint32_t type = 0, flags = 0, address = 0;
     uint32_t file_offset = 0, file_bytes = 0, memory_bytes = 0;
+    // ELF32 sh_link/sh_info/sh_entsize are required to classify relocations
+    // and their symbol references; purely descriptive, never applied here.
+    uint32_t link = 0, info = 0, entry_bytes = 0;
     bool compressed = false;
     bool allocated() const { return (flags & 2u) != 0u; }
     bool executable() const { return (flags & 4u) != 0u; }
