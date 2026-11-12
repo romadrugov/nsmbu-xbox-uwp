@@ -92,7 +92,7 @@ typedef struct NSMBUR7EntryReport {
     uint32_t final_r3;
     uint32_t functions_entered;
     uint32_t loop_ticks;
-    uint32_t exception_code;
+    uint32_t seh_code;
     uint64_t exception_address;
     char stop_reason[160];
 } NSMBUR7EntryReport;
