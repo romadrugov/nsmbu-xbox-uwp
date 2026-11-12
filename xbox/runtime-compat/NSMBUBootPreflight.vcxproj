@@ -39,18 +39,21 @@
       <SDLCheck>true</SDLCheck>
       <AdditionalOptions>/std:c++17 %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\runtime\src;$(ProjectDir)..\..\runtime\include;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\runtime\src;$(ProjectDir)..\..\runtime\include;$(ProjectDir)..\smoke;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/NODEFAULTLIB:vccorlib /NODEFAULTLIB:msvcrt %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>vccorlib.lib;msvcrt.lib;$(NSMBUR4BridgeObj);$(NSMBUR4MathObj);$(NSMBUR4DispatchObj);$(NSMBUR4RuntimeObj);$(NSMBUR4Archive);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vccorlib.lib;msvcrt.lib;bcrypt.lib;$(NSMBUR4BridgeObj);$(NSMBUR4MathObj);$(NSMBUR4DispatchObj);$(NSMBUR4RuntimeObj);$(NSMBUR4Archive);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="BootMain.cpp" />
     <ClCompile Include="..\..\runtime\src\core\xbox_guest_vm.cpp" />
+    <ClCompile Include="..\..\runtime\src\core\rpx_inspect.cpp" />
+    <ClCompile Include="..\..\runtime\src\core\rpx_stage.cpp" />
+    <ClCompile Include="..\smoke\RpxProbe.cpp" />
   </ItemGroup>
   <ItemGroup><AppxManifest Include="PackageBootPreflight.appxmanifest" /></ItemGroup>
   <ItemGroup>
