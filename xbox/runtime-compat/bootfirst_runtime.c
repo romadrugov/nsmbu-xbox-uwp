@@ -228,7 +228,7 @@ int nsmbu_r5_prepare_cpu(uint32_t entry, uint32_t stack_base,
 static int r7_filter(unsigned int code,
                      struct _EXCEPTION_POINTERS* exception,
                      NSMBUR7EntryReport* output) {
-    output->exception_code = code;
+    output->seh_code = code;
     output->exception_address = exception && exception->ExceptionRecord
         ? (uint64_t)(uintptr_t)exception->ExceptionRecord->ExceptionAddress
         : 0u;
