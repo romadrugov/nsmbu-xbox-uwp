@@ -148,6 +148,21 @@ $ok = ($linkExit -eq 0) -and ($null -ne $exe)
 # This step does NOT run the game's entrypoint or embed RPX sections.
 $bootOk = (-not $BuildBootShell)
 if ($BuildBootShell -and $ok) {
+  # R5 reuses the tested Xbox smoke RPX loader. Its generated header
+  # contains ONLY the authored three-instruction synthetic ELF fixture and
+  # known SHA256 fingerprints; no RPX/game bytes from the PRIVATE archive.
+  # Generate the tiny fixture directly, without rerunning PPC translation.
+  $publicRpx = Join-Path $dest 'r5-public-synthetic.rpx'
+  $publicHeader = Join-Path $root 'xbox/smoke/generated/PublicRpxFixture.h'
+  $publicCode = 'import sys; from pathlib import Path; sys.path.insert(0,sys.argv[1]); from android_fixture import synthetic_rpx; Path(sys.argv[2]).write_bytes(synthetic_rpx())'
+  & py -3 -c $publicCode (Join-Path $root 'recomp') $publicRpx *> (Join-Path $dest 'r5-public-fixture.log')
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $publicRpx)) {
+    throw 'R5 public synthetic RPX generation failed; inspect LOCAL r5-public-fixture.log'
+  }
+  & py -3 (Join-Path $root 'xbox/smoke/make_public_rpx_header.py') $publicRpx $publicHeader *> (Join-Path $dest 'r5-public-header.log')
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $publicHeader)) {
+    throw 'R5 public synthetic RPX header generation failed; inspect LOCAL r5-public-header.log'
+  }
   $bootOut = Join-Path $dest 'boot-app'
   $bootInt = Join-Path $dest 'boot-int'
   foreach ($p in @($bootOut, $bootInt)) {
