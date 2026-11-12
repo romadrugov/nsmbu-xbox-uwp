@@ -38,7 +38,7 @@
       <CompileAsWinRT>true</CompileAsWinRT>
       <SDLCheck>true</SDLCheck>
       <AdditionalOptions>/std:c++17 %(AdditionalOptions)</AdditionalOptions>
-      <PreprocessorDefinitions>NSMBU_R5_CPU_BOOTSTRAP=1;NSMBU_R5C_LINK_AUDIT=1;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NSMBU_R5_CPU_BOOTSTRAP=1;NSMBU_R5C_LINK_AUDIT=1;NSMBU_R5D_RELOC_AUDIT=1;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\runtime\src;$(ProjectDir)..\..\runtime\include;$(ProjectDir)..\smoke;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
@@ -55,6 +55,7 @@
     <ClCompile Include="..\..\runtime\src\core\rpx_stage.cpp" />
     <ClCompile Include="..\..\runtime\src\core\r5_startup_metadata.cpp" />
     <ClCompile Include="..\..\runtime\src\core\r5c_link_audit.cpp" />
+    <ClCompile Include="..\..\runtime\src\core\r5d_relocation_audit.cpp" />
     <ClCompile Include="..\smoke\RpxProbe.cpp" />
   </ItemGroup>
   <ItemGroup><AppxManifest Include="PackageBootPreflight.appxmanifest" /></ItemGroup>
