@@ -19,8 +19,9 @@ public:
 // supplied recomp table but NEVER executes a Nintendo game function.
 extern "C" int nsmbu_private_game_link_metadata();
 // Resolve both real Espresso implementations from core/espresso_fp.c.
-// Do not execute the game or synthesize placeholder implementations.
-#include "ppc.h"
+// Do not pull the clang-only PPC header into an MSVC/C++/CX translation unit.
+extern "C" double ppc_fres(double);
+extern "C" double ppc_frsqrte(double);
 #endif
 
 int main() {
