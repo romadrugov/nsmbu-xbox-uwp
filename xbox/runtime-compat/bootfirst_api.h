@@ -79,6 +79,28 @@ typedef struct NSMBUR6LeafReport {
 // Caller opt-in and runtime compile flag are REQUIRED before invocation.
 int nsmbu_r6_run_pure_leaf(const uint8_t* text, uint32_t text_address,
                            uint32_t text_size, NSMBUR6LeafReport* output);
+// R7: deliberately experimental real-game entrypoint attempt, only in
+// owner-private opt-in builds after verified USA_V0 RPX staging and CPU setup.
+// This is a failure-first execution probe, NOT a working Cafe OS runtime.
+// Native exceptions, missing HLE and an instrumented loop/function budget
+// stop the attempt instead of being misreported as successful boot.
+typedef struct NSMBUR7EntryReport {
+    uint32_t status;           // 1 returned, 2 HLE/trap/budget, 3 SEH fault
+    uint32_t entry;
+    uint32_t last_pc;
+    uint32_t last_lr;
+    uint32_t final_r3;
+    uint32_t functions_entered;
+    uint32_t loop_ticks;
+    uint32_t exception_code;
+    uint64_t exception_address;
+    char stop_reason[160];
+} NSMBUR7EntryReport;
+// The source image and native recompilation are compared to known USA_V0
+// by the caller before invoking this routine. Requires R7 compile opt-in.
+// Return negative on rejected preflight; otherwise report.status identifies
+// whether the entrypoint returned or the guarded execution stopped.
+int nsmbu_r7_try_entry(NSMBUR7EntryReport* report);
 void nsmbu_bootfirst_shutdown_dispatch(void);
 uint32_t nsmbu_bootfirst_trace_count(void);
 #ifdef __cplusplus
