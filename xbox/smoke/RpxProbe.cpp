@@ -287,6 +287,10 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                                 cpu.r13, cpu.lr, kStackBase, stackSize);
                             log(detail);
                             if (code == 0) {
+                                sprintf_s(detail,
+                                    "[rpx/R5B] CPU float state: fpscr=%08X gqr2=%08X gqr3=%08X gqr4=%08X gqr5=%08X",
+                                    cpu.fpscr, cpu.gqr2, cpu.gqr3, cpu.gqr4, cpu.gqr5);
+                                log(detail);
                                 log("[rpx/R5B] CPU BOOTSTRAP PASS: stack and real Cpu register state prepared");
                                 log("[rpx/R5B] EXECUTION STILL DISABLED: imports, relocations and Cafe OS not initialized");
                             } else {
