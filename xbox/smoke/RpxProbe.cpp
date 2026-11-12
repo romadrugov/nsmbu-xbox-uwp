@@ -111,7 +111,8 @@ bool sha256_hex(const std::vector<uint8_t>& input, std::string& hex) {
 }
 } // namespace
 
-void run(xboxguest::GuestVm& guest, void (*log)(const char*)) {
+void run(xboxguest::GuestVm& guest, void (*log)(const char*),
+         const char* requiredBuild) {
     if (!log) return;
     log("[rpx/0.6] Phase 1: validate public synthetic PowerPC ELF/RPX");
     xboxrpx::Image synthetic;
