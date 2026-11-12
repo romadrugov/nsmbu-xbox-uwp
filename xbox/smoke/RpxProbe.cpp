@@ -6,6 +6,9 @@
 #include "bootfirst_api.h"
 #if defined(NSMBU_R5C_LINK_AUDIT)
 #include "core/r5c_link_audit.h"
+#if defined(NSMBU_R5D_RELOC_AUDIT)
+#include "core/r5d_relocation_audit.h"
+#endif
 #endif
 #endif
 #include "generated/PublicRpxFixture.h"
@@ -315,7 +318,11 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                                     cpu.r13, unsigned(a.sda_staged));
                                 log(detail);
                                 if (!a.sda_staged || !a.sda2_staged) {
+#if defined(NSMBU_R5D_RELOC_AUDIT)
+                                    log("[rpx/R5D] SDA base itself not staged; bases are relative offsets, classify their *accessed ranges* first");
+#else
                                     log("[rpx/R5C] FIRST EXECUTION BLOCKED: SDA base outside staged sections; classify memory regions first");
+#endif
                                 }
                                 for (const auto& missing : image.sections) {
                                     if (!missing.allocated() || !missing.memory_bytes ||
@@ -328,6 +335,62 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                                     log(detail);
                                 }
                                 log("[rpx/R5C] Candidate relocation sections are metadata only: no relocations applied");
+#endif
+#if defined(NSMBU_R5D_RELOC_AUDIT)
+                                // Separate diagnostics from guest writes. This audit reads
+                                // owner-local RPX relocation metadata after prior SHA, staging,
+                                // and CPU checks; it never patches a relocation or executes PPC.
+                                xboxrpx::R5DRelocAudit reloc{};
+                                std::string relocError;
+                                if (!xboxrpx::r5d_audit_relocations(
+                                        data.data(), data.size(), image, sections,
+                                        cpu.r13, cpu.r2, reloc, relocError)) {
+                                    log("[rpx/R5D] relocation metadata audit FAILED (no game execution)");
+                                    log(relocError.c_str());
+                                } else {
+                                    sprintf_s(detail,
+                                        "[rpx/R5D] RELA audit: sections=%u REL-without-addend=%u records=%llu "
+                                        "import-refs=%llu entry-window=%llu invalid-symbols=%llu out-of-target=%llu",
+                                        reloc.rela_sections, reloc.rel_without_addend_sections,
+                                        static_cast<unsigned long long>(reloc.records),
+                                        static_cast<unsigned long long>(reloc.imported_symbols),
+                                        static_cast<unsigned long long>(reloc.entry_window_references),
+                                        static_cast<unsigned long long>(reloc.invalid_symbols),
+                                        static_cast<unsigned long long>(reloc.target_outside_section));
+                                    log(detail);
+                                    sprintf_s(detail,
+                                        "[rpx/R5D] PPC reloc types: ADDR32=%llu LO=%llu HI=%llu HA=%llu "
+                                        "REL24=%llu imported-text-immediates=%llu imported-branches=%llu",
+                                        static_cast<unsigned long long>(reloc.type_counts[1]),
+                                        static_cast<unsigned long long>(reloc.type_counts[4]),
+                                        static_cast<unsigned long long>(reloc.type_counts[5]),
+                                        static_cast<unsigned long long>(reloc.type_counts[6]),
+                                        static_cast<unsigned long long>(reloc.type_counts[10]),
+                                        static_cast<unsigned long long>(reloc.text_immediate_candidates),
+                                        static_cast<unsigned long long>(reloc.imported_branch_candidates));
+                                    log(detail);
+                                    sprintf_s(detail,
+                                        "[rpx/R5D] SDA signed-16bit windows: r13-staged=%llu/65536 "
+                                        "r2-staged=%llu/65536 (coverage, not access analysis)",
+                                        static_cast<unsigned long long>(reloc.r13_window_staged_bytes),
+                                        static_cast<unsigned long long>(reloc.r2_window_staged_bytes));
+                                    log(detail);
+                                    for (const auto& slice : reloc.slices) {
+                                        sprintf_s(detail,
+                                            "[rpx/R5D] %.42s -> %.42s entries=%u imported=%u "
+                                            "text-imm=%u imported-branch=%u entry-window=%u outside=%u bad-sym=%u",
+                                            slice.name.c_str(), slice.target.c_str(),
+                                            slice.entries, slice.imported_symbols,
+                                            slice.text_immediate_candidates,
+                                            slice.imported_branch_candidates,
+                                            slice.entry_window_references,
+                                            slice.target_outside_section,
+                                            slice.invalid_symbols);
+                                        log(detail);
+                                    }
+                                    log("[rpx/R5D] RELOCATIONS NOT APPLIED. Imported .text immediates "
+                                        "were considered by recomp/recomp.py; do not reapply blindly.");
+                                }
 #endif
                                 log("[rpx/R5B] EXECUTION STILL DISABLED: imports, relocations and Cafe OS not initialized");
                             } else {
