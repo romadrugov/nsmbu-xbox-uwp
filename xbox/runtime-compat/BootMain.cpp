@@ -91,6 +91,10 @@ void RunPreflight() {
               table.entry_address, table.functions, table.imports,
               table.entry_registered, result);
     Log(line);
+    sprintf_s(line, "dispatch details: failure=%u source=%u index=%u address=%08X fallback=%u null=%u",
+              table.dispatch_failure, table.dispatch_source, table.dispatch_index,
+              table.dispatch_address, table.fallback_entries, table.null_targets);
+    Log(line);
     if (result != 0 || !table.entry_registered) {
         Log("R4 STOP: native entrypoint mapping unavailable");
     } else {
