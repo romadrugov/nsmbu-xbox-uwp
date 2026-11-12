@@ -463,7 +463,11 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
 #endif
                                 }
 #endif
+#if defined(NSMBU_R6A_EXECUTE_LEAF)
+                                log("[rpx/R6A] Game ENTRY still disabled: Cafe OS/imports/scheduler not initialized");
+#else
                                 log("[rpx/R5B] EXECUTION STILL DISABLED: imports, relocations and Cafe OS not initialized");
+#endif
                             } else {
                                 log("[rpx/R5B] CPU BOOTSTRAP FAILED: unsafe startup configuration");
                             }
@@ -473,7 +477,11 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
 #endif
             }
         }
+#if defined(NSMBU_R6A_EXECUTE_LEAF)
+        log("[rpx/R6A] Game ENTRY/HLE disabled; only the vetted optional leaf may have executed");
+#else
         log("[rpx/0.7] LOCAL game execution DISABLED: no entry-point jump, no relocations/HLE");
+#endif
     } catch (...) {
         log("[rpx/0.6] LOCAL UWP file inspection raised an exception");
     }
