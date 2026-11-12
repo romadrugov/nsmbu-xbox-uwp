@@ -5,5 +5,8 @@
 // Public synthetic RPX is embedded by CI from recomp/android_fixture.py.
 // No commercial code is executed or packaged.
 namespace xboxrpxprobe {
-void run(xboxguest::GuestVm& guest, void (*log)(const char*));
+// requiredBuild is enforced before any LOCAL guest memory staging; the older
+// smoke test keeps its original unfiltered known-build behavior by default.
+void run(xboxguest::GuestVm& guest, void (*log)(const char*),
+         const char* requiredBuild = nullptr);
 }
