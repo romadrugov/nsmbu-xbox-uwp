@@ -440,7 +440,7 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                                         log(detail);
                                         sprintf_s(detail,
                                             "[rpx/R7] FIRST BLOCKER: exception=%08X host-pc=%llX reason=%.120s",
-                                            boot.exception_code,
+                                            boot.seh_code,
                                             static_cast<unsigned long long>(boot.exception_address),
                                             boot.stop_reason);
                                         log(detail);
