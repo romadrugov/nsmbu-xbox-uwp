@@ -168,6 +168,17 @@ if ($BuildBootShell -and $ok) {
   foreach ($p in @($bootOut, $bootInt)) {
     New-Item -ItemType Directory -Path $p -Force | Out-Null
   }
+  # R5F optional local PNG preview uses static, public HLSL only.
+  # Compile the same VS/PS HLSL profile used by the physical Xbox smoke app.
+  # Shader headers are ephemeral generated files; no private images enter CI.
+  $fxc = Join-Path $sdkRoot "bin/$sdk/x64/fxc.exe"
+  if (-not (Test-Path -LiteralPath $fxc)) { throw 'R5F requires Windows SDK fxc.exe' }
+  $visualDir = Join-Path $root 'xbox/runtime-compat'
+  $visualShader = Join-Path $visualDir 'BootPreview.hlsl'
+  & $fxc /nologo /T vs_5_0 /E VSMain /Fh (Join-Path $visualDir 'BootPreviewVS.h') /Vn gBootPreviewVS $visualShader *> (Join-Path $dest 'r5f-shader-vs.log')
+  if ($LASTEXITCODE -ne 0) { throw 'R5F VS shader compilation failed' }
+  & $fxc /nologo /T ps_5_0 /E PSMain /Fh (Join-Path $visualDir 'BootPreviewPS.h') /Vn gBootPreviewPS $visualShader *> (Join-Path $dest 'r5f-shader-ps.log')
+  if ($LASTEXITCODE -ne 0) { throw 'R5F PS shader compilation failed' }
   $bootProject = Join-Path $root 'xbox/runtime-compat/NSMBUBootPreflight.vcxproj'
   $bootArgs = @(
     "/p:OutDir=$bootOut/",
