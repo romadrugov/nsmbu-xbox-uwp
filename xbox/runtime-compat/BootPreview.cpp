@@ -59,7 +59,7 @@ std::vector<uint8_t> SyntheticPixels(uint32_t& width, uint32_t& height) {
 // The 2048x2048 limit bounds allocations before the decode/copy operation.
 bool ReadLocalPng(const wchar_t* path, std::vector<uint8_t>& rgba,
                   uint32_t& width, uint32_t& height) {
-    if (!path || GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES)
+    if (!path || !*path)
         return false;
     ComPtr<IWICImagingFactory> factory;
     if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr,
