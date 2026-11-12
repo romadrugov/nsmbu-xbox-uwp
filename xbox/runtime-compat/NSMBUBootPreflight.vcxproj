@@ -38,7 +38,7 @@
       <CompileAsWinRT>true</CompileAsWinRT>
       <SDLCheck>true</SDLCheck>
       <AdditionalOptions>/std:c++17 %(AdditionalOptions)</AdditionalOptions>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NSMBU_R5_CPU_BOOTSTRAP=1;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\runtime\src;$(ProjectDir)..\..\runtime\include;$(ProjectDir)..\smoke;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
@@ -53,6 +53,7 @@
     <ClCompile Include="..\..\runtime\src\core\xbox_guest_vm.cpp" />
     <ClCompile Include="..\..\runtime\src\core\rpx_inspect.cpp" />
     <ClCompile Include="..\..\runtime\src\core\rpx_stage.cpp" />
+    <ClCompile Include="..\..\runtime\src\core\r5_startup_metadata.cpp" />
     <ClCompile Include="..\smoke\RpxProbe.cpp" />
   </ItemGroup>
   <ItemGroup><AppxManifest Include="PackageBootPreflight.appxmanifest" /></ItemGroup>

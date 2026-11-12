@@ -1,6 +1,10 @@
 #include "RpxProbe.h"
 #include "core/rpx_inspect.h"
 #include "core/rpx_stage.h"
+#if defined(NSMBU_R5_CPU_BOOTSTRAP)
+#include "core/r5_startup_metadata.h"
+#include "bootfirst_api.h"
+#endif
 #include "generated/PublicRpxFixture.h"
 #include <windows.h>
 #include <bcrypt.h>
@@ -254,6 +258,48 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                     mappingOk ? "PASSED" : "INCOMPLETE",
                     completed, sections.size(), written);
                 log(detail);
+#if defined(NSMBU_R5_CPU_BOOTSTRAP)
+                if (mappingOk && completed == sections.size() && requiredBuild) {
+                    xboxrpx::StartupMetadata startup{};
+                    if (!xboxrpx::read_startup_metadata(data.data(), data.size(),
+                                                       image, startup, error)) {
+                        log("[rpx/R5B] CPU bootstrap BLOCKED: invalid RPX startup metadata");
+                        log(error.c_str());
+                    } else {
+                        constexpr uint32_t kStackBase = 0x60000000u;
+                        const uint32_t stackSize =
+                            (startup.stack_reserved + 0xFFFFu) & ~0xFFFFu;
+                        if (!guest.commit(kStackBase, stackSize)) {
+                            sprintf_s(detail,
+                                "[rpx/R5B] CPU bootstrap BLOCKED: guest stack commit Win32=%lu",
+                                static_cast<unsigned long>(guest.last_error()));
+                            log(detail);
+                        } else {
+                            std::memset(guest.ptr(kStackBase), 0, stackSize);
+                            NSMBUR5CpuSnapshot cpu{};
+                            const int code = nsmbu_r5_prepare_cpu(
+                                startup.entry, kStackBase, stackSize,
+                                startup.sda_base, startup.sda2_base, &cpu);
+                            sprintf_s(detail,
+                                "[rpx/R5B] CPU bootstrap: status=%d entry=%08X core=%u "
+                                "r1=%08X r2=%08X r13=%08X lr=%08X stack=%08X+%08X",
+                                code, cpu.entry, cpu.core, cpu.r1, cpu.r2,
+                                cpu.r13, cpu.lr, kStackBase, stackSize);
+                            log(detail);
+                            if (code == 0) {
+                                sprintf_s(detail,
+                                    "[rpx/R5B] CPU float state: fpscr=%08X gqr2=%08X gqr3=%08X gqr4=%08X gqr5=%08X",
+                                    cpu.fpscr, cpu.gqr2, cpu.gqr3, cpu.gqr4, cpu.gqr5);
+                                log(detail);
+                                log("[rpx/R5B] CPU BOOTSTRAP PASS: stack and real Cpu register state prepared");
+                                log("[rpx/R5B] EXECUTION STILL DISABLED: imports, relocations and Cafe OS not initialized");
+                            } else {
+                                log("[rpx/R5B] CPU BOOTSTRAP FAILED: unsafe startup configuration");
+                            }
+                        }
+                    }
+                }
+#endif
             }
         }
         log("[rpx/0.7] LOCAL game execution DISABLED: no entry-point jump, no relocations/HLE");

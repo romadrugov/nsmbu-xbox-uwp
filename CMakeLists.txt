@@ -135,7 +135,7 @@ list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "mod_lua_test_stubs\\.cpp$")
 list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "headless_dispatch\\.c$")
 # Xbox UWP-only guest VM and RPX smoke modules are explicitly built by Xbox MSBuild.
 # Do not glob them into the normal desktop, Linux or Android CMake runtime.
-list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "/(xbox_guest_vm|rpx_inspect|rpx_stage)\\.cpp$")
+list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "/(xbox_guest_vm|rpx_inspect|rpx_stage|r5_startup_metadata)\\.cpp$")
 list(APPEND RUNTIME_SOURCES runtime/src/platform/perf_hint.cpp runtime/src/platform/touch_pad.cpp runtime/src/gfx/render_prof.cpp runtime/src/gfx/screenshot.cpp)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(NSMBU_GUEST_STUBS ${CMAKE_BINARY_DIR}/generated/nsmbu_guest_stubs.c)
@@ -705,6 +705,13 @@ add_test(NAME bg_scroll_wide COMMAND bg_scroll_wide_test)
 add_executable(aspect_ui_test runtime/test/aspect_ui_test.cpp)
 target_include_directories(aspect_ui_test PRIVATE runtime/src)
 add_test(NAME aspect_ui COMMAND aspect_ui_test)
+
+# Byte-free Cafe OS boot metadata parser tests shared by Windows, Linux and Mac.
+add_executable(r5_startup_metadata_test runtime/test/r5_startup_metadata_test.cpp
+    runtime/src/core/r5_startup_metadata.cpp runtime/src/core/rpx_inspect.cpp)
+target_include_directories(r5_startup_metadata_test PRIVATE runtime/src)
+add_test(NAME r5_startup_metadata COMMAND r5_startup_metadata_test)
+
 
 if(NSMBU_HAS_VULKAN)
   add_executable(attachment_view_usage_test runtime/test/attachment_view_usage_test.cpp)
