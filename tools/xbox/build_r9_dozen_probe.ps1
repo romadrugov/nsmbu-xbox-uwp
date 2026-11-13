@@ -59,10 +59,16 @@ $arguments = @(
 )
 & $msbuild @arguments
 if ($LASTEXITCODE -ne 0) { throw 'R9 UWP Vulkan application build failed' }
+$compiled = @{}
 foreach ($file in @('NSMBUDozenProbe.exe','NSMBUDozenProbe.winmd','resources.pri')) {
-  if (-not (Test-Path (Join-Path $build $file))) { throw "Missing R9 output: $file" }
+  $matches = @(Get-ChildItem -LiteralPath $build -Recurse -File -Filter $file)
+  if ($matches.Count -ne 1) {
+    throw "Expected exactly one R9 build output: $file; got $($matches.Count)"
+  }
+  $compiled[$file] = $matches[0].FullName
+  Write-Host "UWP generated: $file"
 }
-$exe = Join-Path $build 'NSMBUDozenProbe.exe'
+$exe = $compiled['NSMBUDozenProbe.exe']
 $bytes = [IO.File]::ReadAllBytes($exe)
 $pe = [BitConverter]::ToInt32($bytes,0x3c)
 if ($bytes[$pe] -ne 80 -or $bytes[$pe+1] -ne 69 -or
@@ -77,7 +83,7 @@ if (($dllCharacteristics -band 0x1000) -eq 0) {
 $stage = Join-Path $out 'stage'
 New-Item -ItemType Directory -Path $stage | Out-Null
 foreach ($file in @('NSMBUDozenProbe.exe','NSMBUDozenProbe.winmd','resources.pri')) {
-  Copy-Item (Join-Path $build $file) (Join-Path $stage $file)
+  Copy-Item $compiled[$file] (Join-Path $stage $file)
 }
 Copy-Item (Join-Path $root 'xbox/r9/PackageDozenProbe.appxmanifest') (Join-Path $stage 'AppxManifest.xml')
 Copy-Item (Join-Path $root 'xbox/smoke/Assets') (Join-Path $stage 'Assets') -Recurse
