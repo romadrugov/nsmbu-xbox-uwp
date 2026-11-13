@@ -182,3 +182,31 @@ add_custom_target(r10_compile_full_uwp ALL
   DEPENDS r10_full_engine r10_gamecode r10_cemu_latte r10_imgui zlibstatic r10_lz4)
 message(STATUS "R10 compiling ${OWNER_CHUNKS} real game units + full Cafe OS/GX2/Vulkan under UWP")
 message(STATUS "No fake HLE or fake gameplay; binary link+runtime remains next milestone")
+
+# R11 separate owner-private executable link gate; unlike R10 static .lib,
+# this forces all full-game dependencies to resolve as one UWP program.
+# No Nintendo-derived sources or app binaries enter the public repository.
+option(R11_LINK_FULL_GAME "Enable real full NSMBU UWP executable link" OFF)
+if(R11_LINK_FULL_GAME)
+  add_executable(r11_full_game_uwp WIN32
+    "${NSMBU_ROOT}/xbox/r11/R11WinRTEntry.cpp")
+  target_compile_features(r11_full_game_uwp PRIVATE cxx_std_20)
+  target_compile_definitions(r11_full_game_uwp PRIVATE
+    NSMBU_XBOX_UWP=1 NOMINMAX=1 _CRT_SECURE_NO_WARNINGS=1
+    WINAPI_FAMILY=WINAPI_FAMILY_APP)
+  target_include_directories(r11_full_game_uwp PRIVATE
+    "${R10_SDL3_INSTALL}/include")
+  # All 93 owner C chunks, full game main(), Cafe OS, GX2, Vulkan,
+  # glslang, and SDL3 WinRT must resolve together. No fabricated HLE.
+  target_link_libraries(r11_full_game_uwp PRIVATE
+    r10_full_engine r10_gamecode r10_cemu_latte r10_imgui
+    ${R10_SDL_TARGET} zlibstatic r10_lz4
+    glslang::glslang glslang::SPIRV
+    glslang::glslang-default-resource-limits
+    windowsapp runtimeobject d3d12 dxgi ws2_32 bcrypt)
+  set_target_properties(r11_full_game_uwp PROPERTIES
+    OUTPUT_NAME "NSMBUFullRuntimeR11"
+    LINK_FLAGS "/INCREMENTAL:NO /APPCONTAINER /SUBSYSTEM:WINDOWS")
+  message(STATUS "R11 real AppContainer game executable link ENABLED")
+  message(STATUS "R11 contains no synthetic gameplay or packaged assets")
+endif()
