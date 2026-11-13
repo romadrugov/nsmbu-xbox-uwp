@@ -12,17 +12,17 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 get_filename_component(NSMBU_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(R10_GEN_DIR "" CACHE PATH "Private SHA-verified USA_V0 generated C")
-set(R10_SDL3_ROOT "" CACHE PATH "Pinned UWP SDL3 fork, not upstream")
+set(R10_SDL3_INSTALL "" CACHE PATH "Precompiled MSVC C++/CX SDL3 UWP install prefix")
 set(R10_GLSLANG_ROOT "" CACHE PATH "Pinned glslang source")
 set(R10_VULKAN_HEADERS "" CACHE PATH "Pinned Vulkan-Headers source")
-foreach(path R10_GEN_DIR R10_SDL3_ROOT R10_GLSLANG_ROOT R10_VULKAN_HEADERS)
+foreach(path R10_GEN_DIR R10_SDL3_INSTALL R10_GLSLANG_ROOT R10_VULKAN_HEADERS)
   if(NOT IS_DIRECTORY "${${path}}")
     message(FATAL_ERROR "Missing R10 dependency: ${path}")
   endif()
 endforeach()
 foreach(file "${R10_GEN_DIR}/funcs.h" "${R10_GEN_DIR}/table.c"
   "${R10_GEN_DIR}/imports.c" "${R10_VULKAN_HEADERS}/include/vulkan/vulkan.h"
-  "${R10_SDL3_ROOT}/include/SDL3/SDL.h"
+  "${R10_SDL3_INSTALL}/include/SDL3/SDL.h"
   "${R10_GLSLANG_ROOT}/glslang/Public/ShaderLang.h")
   if(NOT EXISTS "${file}")
     message(FATAL_ERROR "Incomplete full engine input: ${file}")
@@ -34,12 +34,19 @@ if(NOT OWNER_CHUNKS EQUAL 93)
   message(FATAL_ERROR "Expected 93 actual private game source chunks; got ${OWNER_CHUNKS}")
 endif()
 
-# SDL3 upstream dropped UWP support. The pinned SDL3-uwp fork restores it.
-set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-set(SDL_STATIC ON CACHE BOOL "" FORCE)
-add_subdirectory("${R10_SDL3_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/sdl3" EXCLUDE_FROM_ALL)
+# SDL3 upstream dropped UWP support. The pinned SDL3-uwp fork uses
+# C++/CX (/ZW) and MUST be prebuilt with MSVC cl.exe. ClangCL cannot parse
+# the WinRT hat syntax. Both are WindowsStore x64 /MD, so link ABI matches.
+# Never compile SDL3 directly with the native game-code Clang toolchain.
+list(PREPEND CMAKE_PREFIX_PATH "${R10_SDL3_INSTALL}")
+find_package(SDL3 CONFIG REQUIRED)
+if(TARGET SDL3::SDL3-static)
+  set(R10_SDL_TARGET SDL3::SDL3-static)
+elseif(TARGET SDL3::SDL3)
+  set(R10_SDL_TARGET SDL3::SDL3)
+else()
+  message(FATAL_ERROR "Pinned SDL3-uwp static library package missing")
+endif()
 set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
 set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
 set(ENABLE_OPT OFF CACHE BOOL "" FORCE)
@@ -151,7 +158,7 @@ target_compile_options(r10_full_engine PRIVATE
 set_source_files_properties(${GX2} ${GFX}
   PROPERTIES COMPILE_OPTIONS "/FI${CEMU_DIR}/cemu_shim.h")
 target_link_libraries(r10_full_engine PUBLIC
-  r10_gamecode r10_cemu_latte r10_imgui SDL3::SDL3
+  r10_gamecode r10_cemu_latte r10_imgui ${R10_SDL_TARGET}
   glslang::glslang glslang::SPIRV
   glslang::glslang-default-resource-limits)
 add_custom_target(r10_compile_full_uwp ALL
