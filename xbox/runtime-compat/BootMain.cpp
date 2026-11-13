@@ -82,7 +82,7 @@ bool CheckSparseGuestMemory(xboxguest::GuestVm& vm) {
 
 void RunPreflight() {
 #if defined(NSMBU_R7_ENTRY_PROBE)
-    Log("R7 owner opted in: attempting the real game entrypoint, stop at first blocker");
+    Log("R7C owner opted in: bounded game entry with debugger/coreinit HLE, stop at first blocker");
 #elif defined(NSMBU_R6A_EXECUTE_LEAF)
     Log("R6A owner opted in: one strictly validated native game leaf may execute");
 #else
