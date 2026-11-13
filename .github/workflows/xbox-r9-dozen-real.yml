@@ -31,6 +31,16 @@ jobs:
           persist-credentials: false
           path: deps/vulkan-headers
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirm host Python toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & python --version
+          & python -m pip --version
+          if ($LASTEXITCODE -ne 0) { throw 'Python 3.12 setup failed' }
       - name: Build actual AppContainer-compatible Dozen from Mesa 26.2.6
         shell: pwsh
         timeout-minutes: 275
