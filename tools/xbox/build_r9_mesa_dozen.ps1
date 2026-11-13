@@ -88,7 +88,7 @@ endian = 'little'
 $crossText | Set-Content -LiteralPath $cross -Encoding ascii
 $build = Join-Path $mesa 'build-uwp'
 $mesonArgs = @(
-  'setup',$build,"--cross-file=$cross",'--buildtype=release',
+  'setup',$build,$mesa,"--cross-file=$cross",'--buildtype=release',
   '-Dvulkan-drivers=microsoft-experimental','-Dgallium-drivers=',
   '-Dopengl=false','-Dgles1=disabled','-Dgles2=disabled',
   '-Degl=disabled','-Dglx=disabled','-Dplatforms=windows',
@@ -99,7 +99,7 @@ $mesonArgs = @(
 )
 & py -3 -m mesonbuild.mesonmain @mesonArgs
 if ($LASTEXITCODE -ne 0) { throw 'Mesa Dozen UWP meson configure failed' }
-& ninja -C $build
+& py -3 -m ninja -C $build
 if ($LASTEXITCODE -ne 0) { throw 'Mesa Dozen UWP compilation failed' }
 $dll = Join-Path $build 'src/microsoft/vulkan/vulkan_dzn.dll'
 if (-not (Test-Path $dll)) { throw 'Compiled vulkan_dzn.dll absent' }
