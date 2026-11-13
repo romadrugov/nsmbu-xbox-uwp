@@ -31,6 +31,7 @@ enum { kR7Exception = 0xE2470001u, kR7MaxFunctions = 20000u,
 static _Atomic(int) s_r7_active = 0;
 static _Atomic(uint32_t) s_r7_funcs = 0;
 static _Atomic(uint32_t) s_r7_loops = 0;
+static _Atomic(uint32_t) s_r7_handled_coreinit = 0;
 static _Atomic(uint32_t) s_r7_last_pc = 0;
 static uint64_t s_r7_start_ms = 0;
 static char s_r7_reason[160];
@@ -172,14 +173,17 @@ void hle_unimplemented(Cpu* cpu, const char* library, const char* name) {
             s_r7_main_thread_address != 0u) {
             // Real guest OSThread, not nullptr/pretend success.
             cpu->r[3] = s_r7_main_thread_address;
+            atomic_fetch_add_explicit(&s_r7_handled_coreinit, 1u, memory_order_relaxed);
             return;
         }
         if (strcmp(name, "OSGetCoreId") == 0) {
             cpu->r[3] = cpu->core; // matches threads.cpp
+            atomic_fetch_add_explicit(&s_r7_handled_coreinit, 1u, memory_order_relaxed);
             return;
         }
         if (strcmp(name, "OSMemoryBarrier") == 0) {
             atomic_thread_fence(memory_order_seq_cst);
+            atomic_fetch_add_explicit(&s_r7_handled_coreinit, 1u, memory_order_relaxed);
             return;
         }
     }
@@ -327,6 +331,7 @@ int nsmbu_r7_try_entry(NSMBUR7EntryReport* report) {
     s_r7_reason[0] = 0;
     atomic_store_explicit(&s_r7_funcs, 0, memory_order_relaxed);
     atomic_store_explicit(&s_r7_loops, 0, memory_order_relaxed);
+    atomic_store_explicit(&s_r7_handled_coreinit, 0, memory_order_relaxed);
     atomic_store_explicit(&s_r7_last_pc, cpu.pc, memory_order_relaxed);
     s_r7_start_ms = GetTickCount64();
     g_ppc_trace = 1;
@@ -338,6 +343,8 @@ int nsmbu_r7_try_entry(NSMBUR7EntryReport* report) {
         atomic_load_explicit(&s_r7_funcs, memory_order_relaxed);
     report->loop_ticks =
         atomic_load_explicit(&s_r7_loops, memory_order_relaxed);
+    report->handled_coreinit_calls =
+        atomic_load_explicit(&s_r7_handled_coreinit, memory_order_relaxed);
     report->last_pc =
         atomic_load_explicit(&s_r7_last_pc, memory_order_relaxed);
     report->last_lr = cpu.lr;
