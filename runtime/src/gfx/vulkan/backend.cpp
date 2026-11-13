@@ -2182,7 +2182,13 @@ static void init_device(std::vector<const char *> extensions,
   }
   VkApplicationInfo ai{VK_STRUCTURE_TYPE_APPLICATION_INFO};
   ai.pApplicationName = "NSMBU Vulkan";
+#ifdef NSMBU_XBOX_UWP
+  // Owner's Series S R9 test verified Mesa Dozen Vulkan 1.2.354.
+  // The existing runtime supports render-pass fallback on Vulkan 1.2.
+  ai.apiVersion = VK_API_VERSION_1_2;
+#else
   ai.apiVersion = VK_API_VERSION_1_3;
+#endif
   ci.pApplicationInfo = &ai;
   ci.enabledExtensionCount = extensions.size();
   ci.ppEnabledExtensionNames = extensions.data();
@@ -2557,8 +2563,8 @@ void init() {
   R.tv.window = SDL_CreateWindow(initialTitle, windowW, windowH, windowFlags);
   if (!R.tv.window)
     throw std::runtime_error(SDL_GetError());
-#ifdef __ANDROID__
-
+#if defined(__ANDROID__) || defined(NSMBU_XBOX_UWP)
+  // WinRT SDL3 supports only one CoreWindow, not a second gamepad window.
 #else
   if (!env::NO_GAMEPAD()) {
 
