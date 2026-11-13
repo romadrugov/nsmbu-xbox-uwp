@@ -119,6 +119,8 @@ std::string cpu_label() {
     if (sysctlbyname("machdep.cpu.brand_string", buf, &n, nullptr, 0) == 0 && buf[0]) return trim_ws(buf);
     n = sizeof buf;
     if (sysctlbyname("hw.model", buf, &n, nullptr, 0) == 0 && buf[0]) return trim_ws(buf);
+#elif defined(NSMBU_XBOX_UWP)
+    return "Xbox UWP (hardware details restricted)";
 #else
     std::ifstream in("/proc/cpuinfo");
     std::string line;
