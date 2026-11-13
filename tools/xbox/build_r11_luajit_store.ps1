@@ -39,6 +39,13 @@ $anchor = ' /nologo /c /O2 /W3 '
 if (-not $text.Contains($anchor)) { throw 'Pinned LuaJIT build command layout changed' }
 $text = $text.Replace($anchor,
   ' /nologo /c /O2 /W3 /MD /DLUAJIT_DISABLE_FFI /DLUAJIT_DISABLE_JIT ')
+# The UWP /MD CRT's host-side LuaJIT generators also need WindowsApp
+# imports (QueryPerformanceCounter, GetCurrentThreadId, RoInitialize).
+# This affects BOTH temporary host generators and the static Lua library.
+$oldLink = '@set LJLINK=link /nologo'
+if (-not $text.Contains($oldLink)) { throw 'Pinned LuaJIT link setting changed' }
+$text = $text.Replace($oldLink,
+  '@set LJLINK=link /nologo WindowsApp.lib runtimeobject.lib')
 [IO.File]::WriteAllText($bat, $text, [Text.Encoding]::ASCII)
 # LuaJIT's msvcbuild.bat may exit 0 even after jumping to :BAD; verify actual
 # produced lib and exported API symbols explicitly.
