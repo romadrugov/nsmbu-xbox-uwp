@@ -181,7 +181,22 @@ void hle_unimplemented(Cpu* cpu, const char* library, const char* name) {
             atomic_fetch_add_explicit(&s_r7_handled_coreinit, 1u, memory_order_relaxed);
             return;
         }
-        if (strcmp(name, "OSMemoryBarrier") == 0) {
+        // Exact no-debugger behavior from upstream coreinit_misc.cpp.
+        // These are read-only queries: no debugger is attached/initialized.
+        if (strcmp(name, "OSIsDebuggerInitialized") == 0 ||
+            strcmp(name, "OSIsDebuggerPresent") == 0) {
+            cpu->r[3] = 0u;
+            atomic_fetch_add_explicit(&s_r7_handled_coreinit, 1u, memory_order_relaxed);
+            return;
+        }
+        if (strcmp(name, "OSGetMainCoreId") == 0) {
+            // Upstream Cafe OS startup uses Espresso core 1 as main.
+            cpu->r[3] = 1u;
+            atomic_fetch_add_explicit(&s_r7_handled_coreinit, 1u, memory_order_relaxed);
+            return;
+        }
+        if (strcmp(name, "OSMemoryBarrier") == 0 ||
+            strcmp(name, "OSEnforceInorderIO") == 0) {
             atomic_thread_fence(memory_order_seq_cst);
             atomic_fetch_add_explicit(&s_r7_handled_coreinit, 1u, memory_order_relaxed);
             return;
