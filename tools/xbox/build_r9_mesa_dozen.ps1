@@ -50,7 +50,10 @@ $d3d12Lib = @(Get-ChildItem (Join-Path $kit 'Lib') -Directory |
   Where-Object { Test-Path $_ } | Select-Object -First 1)
 if ($d3d12Lib.Count -ne 1) { throw 'SDK d3d12.lib missing' }
 $env:LIB = "$(Split-Path $d3d12Lib[0] -Parent);$env:LIB"
-& py -3 -m pip install --disable-pip-version-check 'meson>=1.5,<2' ninja mako packaging ply pyyaml
+& python -m pip install --disable-pip-version-check 'meson>=1.5,<2' ninja mako packaging ply pyyaml
+if ($LASTEXITCODE -ne 0) { throw 'Mesa Python dependencies failed' }
+& python -c 'import mako, packaging, mesonbuild; print("Mesa Python/Mako deps OK")'
+if ($LASTEXITCODE -ne 0) { throw 'Mesa Python/Mako import verification failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Meson Python tools unavailable' }
 if (-not (Get-Command clang-cl -ErrorAction SilentlyContinue) -or
     -not (Get-Command llvm-lib -ErrorAction SilentlyContinue)) {
@@ -97,9 +100,9 @@ $mesonArgs = @(
   '-Dmicrosoft-clc=disabled','-Dspirv-to-dxil=false',
   '-Dvideo-codecs=','-Dshader-cache=disabled'
 )
-& py -3 -m mesonbuild.mesonmain @mesonArgs
+& python -m mesonbuild.mesonmain @mesonArgs
 if ($LASTEXITCODE -ne 0) { throw 'Mesa Dozen UWP meson configure failed' }
-& py -3 -m ninja -C $build
+& python -m ninja -C $build
 if ($LASTEXITCODE -ne 0) { throw 'Mesa Dozen UWP compilation failed' }
 $dll = Join-Path $build 'src/microsoft/vulkan/vulkan_dzn.dll'
 if (-not (Test-Path $dll)) { throw 'Compiled vulkan_dzn.dll absent' }
