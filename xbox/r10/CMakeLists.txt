@@ -86,6 +86,17 @@ target_compile_options(r10_gamecode PRIVATE /O2 /W0
   /clang:-ffp-contract=off /clang:-fno-strict-aliasing)
 target_compile_definitions(r10_gamecode PRIVATE
   WINAPI_FAMILY=WINAPI_FAMILY_APP)
+# The owner-generated code has PPC_LOOP() markers at every guest backward
+# branch. Only R12B enables cooperative preemption at those markers: without
+# it a spinning audio thread can hold simulated core 0 indefinitely.
+# Keep original R12, desktop, and R7D behavior unchanged.
+option(R12B_COOPERATIVE_GUEST_LOOPS
+  "Enable PPC back-edge scheduler yields in owner-private game code" OFF)
+if(R12B_COOPERATIVE_GUEST_LOOPS)
+  target_compile_definitions(r10_gamecode PRIVATE
+    NSMBU_R12B_COOPERATIVE_LOOPS=1)
+  message(STATUS "R12B PPC_LOOP cooperative scheduler preemption ENABLED")
+endif()
 
 # Real Cemu Latte shader decompiler from the upstream full runtime.
 file(GLOB_RECURSE CEMU_SOURCES CONFIGURE_DEPENDS "${CEMU_DIR}/*.cpp")
