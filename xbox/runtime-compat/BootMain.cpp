@@ -38,7 +38,7 @@ void OpenLog() noexcept {
     try {
         auto folder = Windows::Storage::ApplicationData::Current->LocalFolder;
         std::wstring path(folder->Path->Data());
-        path += L"\\nsmbu_r7b_real_entrypoint.txt";
+        path += L"\\nsmbu_r7c_real_entrypoint.txt";
         g_logFile = CreateFile2(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
                                 CREATE_ALWAYS, nullptr);
     } catch (...) {
