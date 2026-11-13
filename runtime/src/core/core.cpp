@@ -121,6 +121,45 @@ extern "C" uint8_t* g_ppc_mem_base = nullptr;
 namespace mem {
 static std::atomic<uint32_t> g_runtime_top{kRuntimeStart};
 
+#if defined(_WIN32) && defined(NSMBU_XBOX_UWP)
+// R10 real full runtime on Xbox: the desktop implementation commits all
+// 4 GiB and may exceed Developer Mode's process commit budget. R7D already
+// proved that this fixed 4 GiB guest VA window can be reserved on Series S.
+// Reserve once, commit zero-initialized 64 KiB regions only when touched.
+// The full desktop address/byte semantics stay unchanged: only the private
+// WindowsStore UWP experiment enables this path.
+//
+// IMPORTANT: This is NOT a sandbox for bad game addresses. It makes the
+// reserved guest 32-bit address space behave like fully demand-zero mapped
+// RAM, just without charging physical/commit budget up front. The first 64K
+// page remains inaccessible (guest null pointer); out-of-range faults still
+// reach normal Windows crash handling. Read-only texture write-watch faults
+// are handled by write_watch.cpp, which installs its own VEH.
+static LONG CALLBACK uwp_guest_commit_fault(EXCEPTION_POINTERS* e) {
+    if (!e || !e->ExceptionRecord) return EXCEPTION_CONTINUE_SEARCH;
+    const EXCEPTION_RECORD* r = e->ExceptionRecord;
+    if (r->ExceptionCode != EXCEPTION_ACCESS_VIOLATION ||
+        r->NumberParameters < 2) return EXCEPTION_CONTINUE_SEARCH;
+    const uintptr_t base = reinterpret_cast<uintptr_t>(PPC_MEM_BASE);
+    const uintptr_t fault = static_cast<uintptr_t>(r->ExceptionInformation[1]);
+    const uint64_t offset = fault >= base ? (uint64_t)(fault - base) : UINT64_MAX;
+    if (offset < 0x10000ull || offset >= 0x100000000ull)
+        return EXCEPTION_CONTINUE_SEARCH;
+    MEMORY_BASIC_INFORMATION info{};
+    if (VirtualQuery(reinterpret_cast<const void*>(fault), &info,
+                     sizeof(info)) != sizeof(info))
+        return EXCEPTION_CONTINUE_SEARCH;
+    // Never override read-only write-watch pages or guards. A separate
+    // handler knows how to resume those on write.
+    if (info.State != MEM_RESERVE) return EXCEPTION_CONTINUE_SEARCH;
+    const uintptr_t page = fault & ~static_cast<uintptr_t>(0xFFFFu);
+    void* committed = VirtualAlloc(reinterpret_cast<void*>(page),
+                                    0x10000u, MEM_COMMIT, PAGE_READWRITE);
+    return committed == reinterpret_cast<void*>(page)
+        ? EXCEPTION_CONTINUE_EXECUTION : EXCEPTION_CONTINUE_SEARCH;
+}
+#endif
+
 void init() {
 #ifdef __APPLE__
 #if TARGET_OS_IPHONE
@@ -148,9 +187,19 @@ void init() {
 
     mprotect(PPC_MEM_BASE, 0x10000, PROT_NONE);
 #elif defined(_WIN32)
+#if defined(NSMBU_XBOX_UWP)
+    void* p = VirtualAlloc(PPC_MEM_BASE, 0x100000000ull,
+                           MEM_RESERVE | MEM_WRITE_WATCH, PAGE_READWRITE);
+    if (p != PPC_MEM_BASE)
+        fatal("cannot reserve 4GiB sparse UWP guest VA (error=%lu)", GetLastError());
+    // 0..0xFFFF is never committed. R10 Game code uses fixed PPC_MEM_BASE.
+    // Fault handler is registered after write-watch below, so its handler
+    // runs first for demand-zero pages, and defers committed read-only pages.
+#else
     void* p = VirtualAlloc(PPC_MEM_BASE, 0x100000000ull, MEM_RESERVE | MEM_COMMIT | MEM_WRITE_WATCH, PAGE_READWRITE);
     if(p != PPC_MEM_BASE) fatal("cannot reserve guest address space (error=%lu)",GetLastError());
     DWORD old; if(!VirtualProtect(PPC_MEM_BASE,0x10000,PAGE_NOACCESS,&old)) fatal("cannot protect guest null page");
+#endif
 #else
 
 #ifdef __ANDROID__
@@ -164,6 +213,11 @@ void init() {
 #endif
 
     if (!wwatch::init(PPC_MEM_BASE, 0x100000000ull)) LOG("[mem] write tracking unavailable: textures use sampled change checks");
+#if defined(_WIN32) && defined(NSMBU_XBOX_UWP)
+    if (!AddVectoredExceptionHandler(1, uwp_guest_commit_fault))
+        fatal("cannot register UWP sparse guest-memory handler (error=%lu)", GetLastError());
+    LOG("[mem] WindowsStore sparse guest address space ready (4GiB reserved, 64KiB on-demand commits)");
+#endif
 }
 
 static std::mutex g_alloc_log_m;
