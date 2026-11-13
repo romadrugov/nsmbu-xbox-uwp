@@ -6,7 +6,20 @@
 #include <cstring>
 #include <exception>
 #include <string>
+#include <atomic>
 #include "DozenFrame.h"
+
+// Mesa's patched Win32 WSI calls GetClientRect, whose UWP import shim
+// looks for these actual EXE exports (see Smash4 Xbox mesa_sysstubs.c).
+// Without them it guesses a desktop window size or reports surface lost.
+static std::atomic<unsigned> g_r9_width{1280u};
+static std::atomic<unsigned> g_r9_height{720u};
+extern "C" __declspec(dllexport) unsigned int uwp_get_width(void) {
+    return g_r9_width.load(std::memory_order_relaxed);
+}
+extern "C" __declspec(dllexport) unsigned int uwp_get_height(void) {
+    return g_r9_height.load(std::memory_order_relaxed);
+}
 
 using namespace Windows::ApplicationModel::Core;
 using namespace Windows::UI::Core;
@@ -45,6 +58,13 @@ public:
     }
     virtual void SetWindow(CoreWindow^ window) {
         window_ = window;
+        const auto bounds = window->Bounds;
+        if (bounds.Width >= 1.f && bounds.Height >= 1.f) {
+            g_r9_width.store(static_cast<unsigned>(bounds.Width),
+                             std::memory_order_relaxed);
+            g_r9_height.store(static_cast<unsigned>(bounds.Height),
+                              std::memory_order_relaxed);
+        }
         window_->Closed += ref new Windows::Foundation::TypedEventHandler<
             CoreWindow^, CoreWindowEventArgs^>(this, &App::OnClosed);
     }
