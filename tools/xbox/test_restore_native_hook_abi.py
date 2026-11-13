@@ -70,6 +70,51 @@ class HookABITest(unittest.TestCase):
                 mod.reconstruct(src, out, {"024B47A8", "026904D4"})
             self.assertFalse(out.exists())
 
+    def test_truly_absent_base_disc_hook_is_skipped_without_stub(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            src = fixture(root)
+            (src / "funcs.h").write_text(
+                (src / "funcs.h").read_text().replace(
+                    "void f_026904D4(Cpu* __restrict c);\\n", ""))
+            (src / "table.c").write_text(
+                (src / "table.c").read_text().replace(
+                    ", f_026904D4", ""))
+            (src / "code_000.c").write_text(
+                "/* synthetic source: no game code */\\n"
+                "void f_024B47A8(Cpu* __restrict c) {\\n  c->r[3] = 42;\\n}\\n")
+            out = root / "result"
+            count = mod.reconstruct(src, out, {"024B47A8", "026904D4"})
+            self.assertEqual(count, 1)
+            self.assertNotIn("f_026904D4_orig", (out / "funcs.h").read_text())
+            self.assertNotIn("f_026904D4", (out / "code_000.c").read_text())
+            self.assertIn("f_024B47A8_orig", (out / "code_000.c").read_text())
+
+    def test_missing_from_header_but_still_in_dispatch_refuses(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            src = fixture(root)
+            (src / "funcs.h").write_text(
+                (src / "funcs.h").read_text().replace(
+                    "void f_026904D4(Cpu* __restrict c);\\n", ""))
+            with self.assertRaisesRegex(ValueError, "dispatch table"):
+                mod.reconstruct(src, root / "out", {"024B47A8", "026904D4"})
+            self.assertFalse((root / "out").exists())
+
+    def test_missing_from_header_but_defined_in_code_refuses(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            src = fixture(root)
+            (src / "funcs.h").write_text(
+                (src / "funcs.h").read_text().replace(
+                    "void f_026904D4(Cpu* __restrict c);\\n", ""))
+            (src / "table.c").write_text(
+                (src / "table.c").read_text().replace(
+                    ", f_026904D4", ""))
+            with self.assertRaisesRegex(ValueError, "still defined"):
+                mod.reconstruct(src, root / "out", {"024B47A8", "026904D4"})
+            self.assertFalse((root / "out").exists())
+
     def test_build_hook_data_parses(self):
         hooks, sites = mod.hook_addresses_for("USA_V0")
         self.assertGreater(len(hooks), 0)
