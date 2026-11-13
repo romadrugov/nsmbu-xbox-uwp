@@ -76,13 +76,13 @@ class HookABITest(unittest.TestCase):
             src = fixture(root)
             (src / "funcs.h").write_text(
                 (src / "funcs.h").read_text().replace(
-                    "void f_026904D4(Cpu* __restrict c);\\n", ""))
+                    "void f_026904D4(Cpu* __restrict c);\n", ""))
             (src / "table.c").write_text(
                 (src / "table.c").read_text().replace(
                     ", f_026904D4", ""))
             (src / "code_000.c").write_text(
-                "/* synthetic source: no game code */\\n"
-                "void f_024B47A8(Cpu* __restrict c) {\\n  c->r[3] = 42;\\n}\\n")
+                "/* synthetic source: no game code */\n"
+                "void f_024B47A8(Cpu* __restrict c) {\n  c->r[3] = 42;\n}\n")
             out = root / "result"
             count = mod.reconstruct(src, out, {"024B47A8", "026904D4"})
             self.assertEqual(count, 1)
@@ -96,7 +96,7 @@ class HookABITest(unittest.TestCase):
             src = fixture(root)
             (src / "funcs.h").write_text(
                 (src / "funcs.h").read_text().replace(
-                    "void f_026904D4(Cpu* __restrict c);\\n", ""))
+                    "void f_026904D4(Cpu* __restrict c);\n", ""))
             with self.assertRaisesRegex(ValueError, "dispatch table"):
                 mod.reconstruct(src, root / "out", {"024B47A8", "026904D4"})
             self.assertFalse((root / "out").exists())
@@ -107,7 +107,7 @@ class HookABITest(unittest.TestCase):
             src = fixture(root)
             (src / "funcs.h").write_text(
                 (src / "funcs.h").read_text().replace(
-                    "void f_026904D4(Cpu* __restrict c);\\n", ""))
+                    "void f_026904D4(Cpu* __restrict c);\n", ""))
             (src / "table.c").write_text(
                 (src / "table.c").read_text().replace(
                     ", f_026904D4", ""))
