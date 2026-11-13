@@ -188,8 +188,16 @@ message(STATUS "No fake HLE or fake gameplay; binary link+runtime remains next m
 # No Nintendo-derived sources or app binaries enter the public repository.
 option(R11_LINK_FULL_GAME "Enable real full NSMBU UWP executable link" OFF)
 if(R11_LINK_FULL_GAME)
+  set(R11_LUAJIT_LIB "" CACHE FILEPATH "Actual pinned LuaJIT UWP static archive")
+  if(NOT EXISTS "${R11_LUAJIT_LIB}")
+    message(FATAL_ERROR "Real R11 UWP LuaJIT static archive is missing; no Lua stubs allowed")
+  endif()
+  add_library(r11_luajit_store STATIC IMPORTED)
+  set_target_properties(r11_luajit_store PROPERTIES
+    IMPORTED_LOCATION "${R11_LUAJIT_LIB}")
   add_executable(r11_full_game_uwp WIN32
-    "${NSMBU_ROOT}/xbox/r11/R11WinRTEntry.cpp")
+    "${NSMBU_ROOT}/xbox/r11/R11WinRTEntry.cpp"
+    "${NSMBU_ROOT}/xbox/r11/compiler_rt_udivti3.cpp")
   target_compile_features(r11_full_game_uwp PRIVATE cxx_std_20)
   target_compile_definitions(r11_full_game_uwp PRIVATE
     NSMBU_XBOX_UWP=1 NOMINMAX=1 _CRT_SECURE_NO_WARNINGS=1
@@ -200,7 +208,7 @@ if(R11_LINK_FULL_GAME)
   # glslang, and SDL3 WinRT must resolve together. No fabricated HLE.
   target_link_libraries(r11_full_game_uwp PRIVATE
     r10_full_engine r10_gamecode r10_cemu_latte r10_imgui
-    ${R10_SDL_TARGET} zlibstatic r10_lz4
+    ${R10_SDL_TARGET} r11_luajit_store zlibstatic r10_lz4
     glslang::glslang glslang::SPIRV
     glslang::glslang-default-resource-limits
     windowsapp runtimeobject d3d12 dxgi ws2_32 bcrypt)
