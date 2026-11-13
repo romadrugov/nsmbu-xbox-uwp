@@ -32,6 +32,10 @@ static _Atomic(int) s_r7_active = 0;
 static _Atomic(uint32_t) s_r7_funcs = 0;
 static _Atomic(uint32_t) s_r7_loops = 0;
 static _Atomic(uint32_t) s_r7_handled_coreinit = 0;
+static _Atomic(uint32_t) s_r7_handled_memory = 0;
+static _Atomic(uint32_t) s_r7_last_mem_dst = 0;
+static _Atomic(uint32_t) s_r7_last_mem_src_or_value = 0;
+static _Atomic(uint32_t) s_r7_last_mem_bytes = 0;
 static _Atomic(uint32_t) s_r7_last_pc = 0;
 static uint64_t s_r7_start_ms = 0;
 static char s_r7_reason[160];
@@ -84,6 +88,90 @@ static void r7_budget_check(void) {
         r7_abort("instrumented native function/loop/time budget reached");
     }
 }
+// The desktop coreinit_mem.cpp implements block moves through memmove,
+// memcpy and memset. Unlike the desktop's fully allocated guest VM, Xbox
+// reserves 4 GiB but commits only a few ranges. Never hand raw game-provided
+// addresses/lengths to the CRT without proving every touched page is mapped.
+//
+// VirtualQuery is available in UWP. The query does not itself commit a page,
+// and a sparse hole is a reason to stop execution, NOT to fabricate a heap.
+enum { kR7MaxMemoryOperation = 32u * 1024u * 1024u };
+static int r7_memory_span_valid(uint32_t guest, uint32_t size,
+                                int needs_write) {
+    if (size == 0) return 1; // zero-byte CRT operation doesn't touch memory
+    const uint64_t end_guest = (uint64_t)guest + size;
+    if (guest < 0x10000u || size > kR7MaxMemoryOperation ||
+        end_guest > 0x100000000ull) return 0;
+    uintptr_t here = (uintptr_t)ppc_ptr(guest);
+    const uintptr_t end = here + (uintptr_t)size;
+    while (here < end) {
+        MEMORY_BASIC_INFORMATION info = {0};
+        if (VirtualQuery((const void*)here, &info, sizeof(info)) <
+            sizeof(info) || info.State != MEM_COMMIT ||
+            (info.Protect & (PAGE_NOACCESS | PAGE_GUARD))) return 0;
+        const DWORD access = info.Protect & 0xFFu;
+        const int write_ok = access == PAGE_READWRITE ||
+                             access == PAGE_EXECUTE_READWRITE ||
+                             access == PAGE_WRITECOPY ||
+                             access == PAGE_EXECUTE_WRITECOPY;
+        const int read_ok = write_ok ||
+                            access == PAGE_READONLY ||
+                            access == PAGE_EXECUTE_READ;
+        if (needs_write ? !write_ok : !read_ok) return 0;
+        const uintptr_t next =
+            (uintptr_t)info.BaseAddress + (uintptr_t)info.RegionSize;
+        if (next <= here) return 0;
+        here = next < end ? next : end;
+    }
+    return 1;
+}
+
+static void r7_fail_memory(const char* op, const char* why, uint32_t addr,
+                           uint32_t bytes) {
+    (void)snprintf(s_r7_reason, sizeof(s_r7_reason),
+                   "coreinit.%.24s guest %.30s at %08X len=%u",
+                   op, why, (unsigned)addr, (unsigned)bytes);
+    r7_abort(s_r7_reason);
+}
+
+static int r7_hle_block_memory(Cpu* cpu, const char* name) {
+    const int copy = strcmp(name, "OSBlockMove") == 0 ||
+                     strcmp(name, "memcpy") == 0 ||
+                     strcmp(name, "memmove") == 0;
+    const int fill = strcmp(name, "OSBlockSet") == 0 ||
+                     strcmp(name, "memset") == 0;
+    if (!copy && !fill) return 0;
+    const uint32_t dest = cpu->r[3];
+    const uint32_t src_or_value = cpu->r[4];
+    const uint32_t length = cpu->r[5];
+    atomic_store_explicit(&s_r7_last_mem_dst, dest, memory_order_relaxed);
+    atomic_store_explicit(&s_r7_last_mem_src_or_value,
+                          src_or_value, memory_order_relaxed);
+    atomic_store_explicit(&s_r7_last_mem_bytes, length, memory_order_relaxed);
+    if (!r7_memory_span_valid(dest, length, 1))
+        r7_fail_memory(name, "destination uncommitted/out of range",
+                       dest, length);
+    if (copy && !r7_memory_span_valid(src_or_value, length, 0))
+        r7_fail_memory(name, "source uncommitted/out of range",
+                       src_or_value, length);
+    if (length) {
+        if (copy) {
+            if (strcmp(name, "memcpy") == 0)
+                memcpy(ppc_ptr(dest), ppc_ptr(src_or_value), length);
+            else
+                memmove(ppc_ptr(dest), ppc_ptr(src_or_value), length);
+        } else {
+            memset(ppc_ptr(dest), (int)(src_or_value & 0xFFu), length);
+        }
+    }
+    cpu->r[3] = dest; // matches desktop coreinit_mem.cpp ABI
+    atomic_fetch_add_explicit(&s_r7_handled_memory, 1u,
+                              memory_order_relaxed);
+    atomic_fetch_add_explicit(&s_r7_handled_coreinit, 1u,
+                              memory_order_relaxed);
+    return 1;
+}
+
 // Only the R7-private rebuilt owner-derived C archive may reference this.
 void nsmbu_r7_loop_tick(void) {
     if (!atomic_load_explicit(&s_r7_active, memory_order_relaxed)) return;
@@ -169,6 +257,9 @@ void hle_unimplemented(Cpu* cpu, const char* library, const char* name) {
 #if defined(NSMBU_R7_ENTRY_PROBE)
     if (atomic_load_explicit(&s_r7_active, memory_order_acquire) &&
         cpu && library && name && strcmp(library, "coreinit") == 0) {
+        // Guarded guest memory operations follow desktop coreinit_mem.cpp
+        // exactly on valid mapped memory; missing guest pages remain fatal.
+        if (r7_hle_block_memory(cpu, name)) return;
         if (strcmp(name, "OSGetCurrentThread") == 0 &&
             s_r7_main_thread_address != 0u) {
             // Real guest OSThread, not nullptr/pretend success.
@@ -347,6 +438,10 @@ int nsmbu_r7_try_entry(NSMBUR7EntryReport* report) {
     atomic_store_explicit(&s_r7_funcs, 0, memory_order_relaxed);
     atomic_store_explicit(&s_r7_loops, 0, memory_order_relaxed);
     atomic_store_explicit(&s_r7_handled_coreinit, 0, memory_order_relaxed);
+    atomic_store_explicit(&s_r7_handled_memory, 0, memory_order_relaxed);
+    atomic_store_explicit(&s_r7_last_mem_dst, 0, memory_order_relaxed);
+    atomic_store_explicit(&s_r7_last_mem_src_or_value, 0, memory_order_relaxed);
+    atomic_store_explicit(&s_r7_last_mem_bytes, 0, memory_order_relaxed);
     atomic_store_explicit(&s_r7_last_pc, cpu.pc, memory_order_relaxed);
     s_r7_start_ms = GetTickCount64();
     g_ppc_trace = 1;
@@ -360,6 +455,14 @@ int nsmbu_r7_try_entry(NSMBUR7EntryReport* report) {
         atomic_load_explicit(&s_r7_loops, memory_order_relaxed);
     report->handled_coreinit_calls =
         atomic_load_explicit(&s_r7_handled_coreinit, memory_order_relaxed);
+    report->handled_memory_calls =
+        atomic_load_explicit(&s_r7_handled_memory, memory_order_relaxed);
+    report->last_mem_dst =
+        atomic_load_explicit(&s_r7_last_mem_dst, memory_order_relaxed);
+    report->last_mem_src_or_value =
+        atomic_load_explicit(&s_r7_last_mem_src_or_value, memory_order_relaxed);
+    report->last_mem_bytes =
+        atomic_load_explicit(&s_r7_last_mem_bytes, memory_order_relaxed);
     report->last_pc =
         atomic_load_explicit(&s_r7_last_pc, memory_order_relaxed);
     report->last_lr = cpu.lr;

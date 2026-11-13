@@ -469,6 +469,12 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                                                     boot.handled_coreinit_calls);
                                                 log(detail);
                                                 sprintf_s(detail,
+                                                    "[rpx/R7D] MEMORY HLE: completed=%u last-dst=%08X "
+                                                    "src-or-value=%08X len=%u",
+                                                    boot.handled_memory_calls, boot.last_mem_dst,
+                                                    boot.last_mem_src_or_value, boot.last_mem_bytes);
+                                                log(detail);
+                                                sprintf_s(detail,
                                                     "[rpx/R7] FIRST BLOCKER: exception=%08X host-pc=%llX reason=%.120s",
                                                     boot.seh_code,
                                                     static_cast<unsigned long long>(boot.exception_address),
