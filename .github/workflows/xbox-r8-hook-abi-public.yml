@@ -1,0 +1,27 @@
+# Synthetic, source-only unit tests; never downloads or handles Nintendo data.
+name: Xbox R8 hook ABI bridge (PUBLIC synthetic fixture)
+
+on:
+  push:
+    branches:
+      - feat/r8-full-runtime-dozen
+  pull_request:
+    branches:
+      - xbox-uwp
+
+permissions:
+  contents: read
+
+jobs:
+  hook-abi-synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax and synthetic 93-unit source bridge tests
+        run: |
+          python -m py_compile tools/xbox/restore_native_hook_abi.py
+          python tools/xbox/test_restore_native_hook_abi.py
