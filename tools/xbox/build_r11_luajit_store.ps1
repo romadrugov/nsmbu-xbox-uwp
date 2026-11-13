@@ -30,71 +30,17 @@ if ($env:VSCMD_ARG_TGT_ARCH -ne 'x64' -or
   throw 'MSVC x64 WindowsStore tools unavailable'
 }
 Copy-Item -LiteralPath $src -Destination $out -Recurse
-# A copied Git submodule has a .git file pointing outside this isolated
-# source tree. LuaJIT's version generator would try that stale path.
+# The copied submodule's .git file points at the original checkout; remove
+# this pointer in the runner-only copy and pin numeric upstream commit time.
 $versionStamp = (& git -C $src show -s --format=%ct HEAD | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $versionStamp -notmatch '^\d{9,12}
-$bat = Join-Path $buildDir 'msvcbuild.bat'
-$text = [IO.File]::ReadAllText($bat)
-# UWP requires dynamic CRT; xbox forbids JIT memory execution. The interpreter
-# remains fully real and script APIs must resolve from the compiled LuaJIT.
-$anchor = ' /nologo /c /O2 /W3 '
-if (-not $text.Contains($anchor)) { throw 'Pinned LuaJIT build command layout changed' }
-$text = $text.Replace($anchor,
-  ' /nologo /c /O2 /W3 /MD /DLUAJIT_DISABLE_FFI /DLUAJIT_DISABLE_JIT ')
-# LuaJIT's msvcbuild.bat generates minilua.exe + buildvm.exe first.
-# They must run on the desktop CI runner, NOT use the UWP app CRT.
-# msvcbuild wraps both host tool invocations in nested setlocal/endlocal.
-# Switch to desktop x64 MSVC only inside those blocks; outside them the
-# compiler remains x64 Store and the produced archive is AppContainer-ready.
-$hostLabel = "`r`n:SETHOSTVARS`r`n"
-if (-not $text.Contains($hostLabel)) { throw 'Pinned LuaJIT host-tool scope changed' }
-$text = $text.Replace($hostLabel,
-  ("`r`n:SETHOSTVARS`r`n@call `"" + $vcvars +
-   "`" x64 >nul`r`n@if errorlevel 1 goto :BAD`r`n"))
-# Do not compile a standalone UWP luajit.exe: it is not part of the game
-# and its non-AppContainer entrypoint is irrelevant to the static library.
-$cliAnchor = '%LJCOMPILE% luajit.c'
-$cleanupAnchor = '@del *.obj *.manifest minilua.exe buildvm.exe'
-if (-not $text.Contains($cliAnchor) -or -not $text.Contains($cleanupAnchor)) {
-  throw 'LuaJIT standalone CLI phase layout changed'
-}
-$text = $text.Replace($cliAnchor, "@goto :R11_TARGET_LIB_READY`r`n" + $cliAnchor)
-$text = $text.Replace($cleanupAnchor, ":R11_TARGET_LIB_READY`r`n" + $cleanupAnchor)
-[IO.File]::WriteAllText($bat, $text, [Text.Encoding]::ASCII)
-# LuaJIT's msvcbuild.bat may exit 0 even after jumping to :BAD; verify actual
-# produced lib and exported API symbols explicitly.
-$cmd = 'cd /d "' + $buildDir + '" && call msvcbuild.bat static'
-& cmd.exe /d /c $cmd
-if ($LASTEXITCODE -ne 0) { throw 'Pinned LuaJIT MSVC Store static build command failed' }
-$lib = Join-Path $buildDir 'lua51.lib'
-if (-not (Test-Path $lib) -or (Get-Item $lib).Length -lt 100000) {
-  throw 'No real nontrivial LuaJIT static library produced'
-}
-$dumpbin = Join-Path $vs 'VC/Tools/MSVC'
-$tools = @(Get-ChildItem -LiteralPath $dumpbin -Directory |
-  Where-Object { $_.Name -match '^\d+\.\d+\.\d+' } |
-  Sort-Object { [version]$_.Name } -Descending)
-if (!$tools.Count) { throw 'MSVC dumpbin directory missing' }
-$exe = Join-Path $tools[0].FullName 'bin/Hostx64/x64/dumpbin.exe'
-$symbols = (& $exe /linkermember:1 $lib | Out-String)
-if ($LASTEXITCODE -ne 0 -or
-    $symbols -notmatch '\blua_pushcclosure\b' -or
-    $symbols -notmatch '\bluaL_loadbuffer\b') {
-  throw 'LuaJIT archive does not export mandatory real Lua APIs'
-}
-Write-Host "R11 REAL UWP LuaJIT static compiled: $lib"
-Write-Host "R11 LuaJIT SHA256: $((Get-FileHash -LiteralPath $lib -Algorithm SHA256).Hash)"
-Write-Host 'This real LuaJIT has JIT and FFI disabled; script interpreter is included.'
-Write-Host 'Xbox execution and mods behavior are NOT yet verified.'
-) {
-  throw 'Cannot pin LuaJIT rolling version to source commit'
+if ($LASTEXITCODE -ne 0 -or $versionStamp -notmatch '^\d{9,12}$') {
+  throw 'Pinned LuaJIT upstream source timestamp missing'
 }
 $copiedGit = Join-Path $out '.git'
 if (Test-Path -LiteralPath $copiedGit) {
   Remove-Item -LiteralPath $copiedGit -Force -Recurse
 }
-[IO.File]::WriteAllText((Join-Path $out '.relver'), "$versionStamp`n")
+[IO.File]::WriteAllText((Join-Path $out '.relver'), ($versionStamp + [Environment]::NewLine))
 $buildDir = Join-Path $out 'src'
 $bat = Join-Path $buildDir 'msvcbuild.bat'
 $text = [IO.File]::ReadAllText($bat)
@@ -104,13 +50,23 @@ $anchor = ' /nologo /c /O2 /W3 '
 if (-not $text.Contains($anchor)) { throw 'Pinned LuaJIT build command layout changed' }
 $text = $text.Replace($anchor,
   ' /nologo /c /O2 /W3 /MD /DLUAJIT_DISABLE_FFI /DLUAJIT_DISABLE_JIT ')
-# The UWP /MD CRT's host-side LuaJIT generators also need WindowsApp
-# imports (QueryPerformanceCounter, GetCurrentThreadId, RoInitialize).
-# This affects BOTH temporary host generators and the static Lua library.
-$oldLink = '@set LJLINK=link /nologo'
-if (-not $text.Contains($oldLink)) { throw 'Pinned LuaJIT link setting changed' }
-$text = $text.Replace($oldLink,
-  '@set LJLINK=link /nologo WindowsApp.lib runtimeobject.lib')
+# Run native LuaJIT generators on the desktop CI host, not under Windows
+# Store CRT. Upstream msvcbuild.bat wraps host invocations in nested
+# SETLOCAL/ENDLOCAL blocks; only those blocks switch to desktop x64.
+$hostLabel = [Environment]::NewLine + ':SETHOSTVARS' + [Environment]::NewLine
+if (-not $text.Contains($hostLabel)) { throw 'Upstream LuaJIT host-tool label changed' }
+$desktopHost = $hostLabel + '@call "' + $vcvars + '" x64 >nul' +
+  [Environment]::NewLine + '@if errorlevel 1 goto :BAD' + [Environment]::NewLine
+$text = $text.Replace($hostLabel, $desktopHost)
+# No standalone luajit.exe is needed for the Xbox game. Skip this UWP
+# console EXE; preserve the real lua51.lib and clean up build tools.
+$cli = '%LJCOMPILE% luajit.c'
+$cleanup = '@del *.obj *.manifest minilua.exe buildvm.exe'
+if (-not $text.Contains($cli) -or -not $text.Contains($cleanup)) {
+  throw 'Upstream LuaJIT CLI/cleanup phase changed'
+}
+$text = $text.Replace($cli, ('@goto :R11_TARGET_LIB_READY' + [Environment]::NewLine + $cli))
+$text = $text.Replace($cleanup, (':R11_TARGET_LIB_READY' + [Environment]::NewLine + $cleanup))
 [IO.File]::WriteAllText($bat, $text, [Text.Encoding]::ASCII)
 # LuaJIT's msvcbuild.bat may exit 0 even after jumping to :BAD; verify actual
 # produced lib and exported API symbols explicitly.
