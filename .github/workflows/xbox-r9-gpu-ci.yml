@@ -1,0 +1,45 @@
+name: R9 Xbox UWP Vulkan/Dozen gateway (PUBLIC, no game)
+
+on:
+  push:
+    branches:
+      - feat/r9-full-uwp-dozen-series-s
+    paths:
+      - "xbox/r9/**"
+      - "tools/xbox/build_r9_dozen_probe.ps1"
+      - ".github/workflows/xbox-r9-gpu-ci.yml"
+  pull_request:
+    branches:
+      - xbox-uwp
+    paths:
+      - "xbox/r9/**"
+      - "tools/xbox/build_r9_dozen_probe.ps1"
+      - ".github/workflows/xbox-r9-gpu-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  public-uwp-gpu-shell:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: KhronosGroup/Vulkan-Headers
+          ref: 88487f687f3100ebe1d3559a8a34d971ee85b977
+          persist-credentials: false
+          path: deps/vulkan-headers
+      - name: Build and sign real x64 UWP Vulkan host without game assets or Mesa driver
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:RUNNER_TEMP 'r9-public-uwp'
+          & '.\tools\xbox\build_r9_dozen_probe.ps1' -VulkanHeadersRoot '.\deps\vulkan-headers' -OutputDir $out
+          if ($LASTEXITCODE -ne 0) { throw 'R9 WinRT Vulkan shell compile/link/package failed' }
+          if (-not (Test-Path (Join-Path $out 'NSMBUDozenProbe_R9_x64.appx'))) {
+            throw 'No signed AppX produced'
+          }
+          Write-Host 'PUBLIC GPU GATE PASS: R9 AppContainer package compiles, links, signs, unpacks.'
+          Write-Host 'No Dozen DLL or Nintendo data included. This is NOT a real Vulkan GPU test.'
