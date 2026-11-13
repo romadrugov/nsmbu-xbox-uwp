@@ -15,7 +15,8 @@ set(R10_GEN_DIR "" CACHE PATH "Private SHA-verified USA_V0 generated C")
 set(R10_SDL3_INSTALL "" CACHE PATH "Precompiled MSVC C++/CX SDL3 UWP install prefix")
 set(R10_GLSLANG_ROOT "" CACHE PATH "Pinned glslang source")
 set(R10_VULKAN_HEADERS "" CACHE PATH "Pinned Vulkan-Headers source")
-foreach(path R10_GEN_DIR R10_SDL3_INSTALL R10_GLSLANG_ROOT R10_VULKAN_HEADERS)
+set(R10_ZLIB_ROOT "" CACHE PATH "Pinned zlib source for UWP Store CRT")
+foreach(path R10_GEN_DIR R10_SDL3_INSTALL R10_GLSLANG_ROOT R10_VULKAN_HEADERS R10_ZLIB_ROOT)
   if(NOT IS_DIRECTORY "${${path}}")
     message(FATAL_ERROR "Missing R10 dependency: ${path}")
   endif()
@@ -23,7 +24,8 @@ endforeach()
 foreach(file "${R10_GEN_DIR}/funcs.h" "${R10_GEN_DIR}/table.c"
   "${R10_GEN_DIR}/imports.c" "${R10_VULKAN_HEADERS}/include/vulkan/vulkan.h"
   "${R10_SDL3_INSTALL}/include/SDL3/SDL.h"
-  "${R10_GLSLANG_ROOT}/glslang/Public/ShaderLang.h")
+  "${R10_GLSLANG_ROOT}/glslang/Public/ShaderLang.h"
+  "${R10_ZLIB_ROOT}/zlib.h" "${R10_ZLIB_ROOT}/CMakeLists.txt")
   if(NOT EXISTS "${file}")
     message(FATAL_ERROR "Incomplete full engine input: ${file}")
   endif()
@@ -46,6 +48,14 @@ elseif(TARGET SDL3::SDL3)
   set(R10_SDL_TARGET SDL3::SDL3)
 else()
   message(FATAL_ERROR "Pinned SDL3-uwp static library package missing")
+endif()
+set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "No zlib test executables in UWP" FORCE)
+set(SKIP_INSTALL_ALL ON CACHE BOOL "No Win32 installer binaries" FORCE)
+# Do NOT use desktop MinGW zlib from R8 or a precompiled Win32 DLL:
+# the real core.cpp includes zlib.h and needs the AppContainer Store CRT.
+add_subdirectory("${R10_ZLIB_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/zlib" EXCLUDE_FROM_ALL)
+if(NOT TARGET zlibstatic)
+  message(FATAL_ERROR "Pinned zlib must expose the AppContainer static target")
 endif()
 set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
 set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
@@ -158,10 +168,10 @@ target_compile_options(r10_full_engine PRIVATE
 set_source_files_properties(${GX2} ${GFX}
   PROPERTIES COMPILE_OPTIONS "/FI${CEMU_DIR}/cemu_shim.h")
 target_link_libraries(r10_full_engine PUBLIC
-  r10_gamecode r10_cemu_latte r10_imgui ${R10_SDL_TARGET}
+  r10_gamecode r10_cemu_latte r10_imgui ${R10_SDL_TARGET} zlibstatic
   glslang::glslang glslang::SPIRV
   glslang::glslang-default-resource-limits)
 add_custom_target(r10_compile_full_uwp ALL
-  DEPENDS r10_full_engine r10_gamecode r10_cemu_latte r10_imgui)
+  DEPENDS r10_full_engine r10_gamecode r10_cemu_latte r10_imgui zlibstatic)
 message(STATUS "R10 compiling ${OWNER_CHUNKS} real game units + full Cafe OS/GX2/Vulkan under UWP")
 message(STATUS "No fake HLE or fake gameplay; binary link+runtime remains next milestone")
