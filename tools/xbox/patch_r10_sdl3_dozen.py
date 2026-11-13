@@ -24,7 +24,7 @@ extern "C" {
 }
 #endif
 '''
-SHIM = r'''\
+SHIM = r'''
 #if defined(SDL_VIDEO_VULKAN)
 // R10 UWP Vulkan bridge. Existing R9 Series S hardware test established that
 // this exact ICD can create/present with CoreWindow through patched Mesa.
