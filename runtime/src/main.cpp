@@ -425,7 +425,42 @@ static void apply_env_txt() {
 }
 #endif
 
+#if defined(NSMBU_XBOX_UWP)
+// Pure C ABI supplied by the real MSVC/C++-CX SDL3 WinRT host. Only R12
+// links this symbol; desktop and earlier Xbox checkpoints are unaffected.
+extern "C" void NSMBU_R12_GetLocalStatePath(wchar_t* target, unsigned capacity);
+
+static void r12_setup_local_state() {
+    wchar_t path16[2048] = {};
+    NSMBU_R12_GetLocalStatePath(path16, 2048);
+    if (!path16[0]) {
+        OutputDebugStringA("[R12] LocalState unavailable from WinRT host\r\n");
+        return;
+    }
+    const int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                          path16, -1, nullptr, 0, nullptr, nullptr);
+    if (bytes < 2) return;
+    std::string home(static_cast<size_t>(bytes), '\0');
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                           path16, -1, home.data(), bytes, nullptr, nullptr) != bytes)
+        return;
+    home.pop_back(); // remove the UTF-8 NUL
+    for (char& c : home)
+        if (c == '\\') c = '/';
+
+    // host::portable_user_dir() uses NSMBU_USER_DIR for logs, settings,
+    // shaders and save state paths. This is set before apply_portable_mode.
+    if (_putenv_s("NSMBU_USER_DIR", home.c_str()) != 0) return;
+    config::game_dir = home + "/game";
+    config::save_dir = home + "/nsmbu/save";
+    OutputDebugStringA("[R12] game root mapped to WinRT LocalState/game\r\n");
+}
+#endif
+
 int main(int argc, char** argv) {
+#if defined(NSMBU_XBOX_UWP)
+    r12_setup_local_state();
+#endif
     if (const char* warm = env::SHADER_WARM())
         if (*warm && std::strcmp(warm, "0")) std::setvbuf(stderr, nullptr, _IONBF, 0);
     apply_portable_mode();
@@ -493,6 +528,9 @@ int main(int argc, char** argv) {
     crash_context::initialize();
     install_crash_handler();
     start_log_file();
+#if defined(NSMBU_XBOX_UWP)
+    LOG("[R12] owner game directory: %s", config::game_dir.c_str());
+#endif
 
     LOG("[boot] %s %s (%s), %s", app_title::kName, build::version(), build::commit(), reporthdr::os_description().c_str());
     LOG("[boot] game version %s (%s, title %s, title version %d)", g_guest_build_label, g_guest_build_name,
