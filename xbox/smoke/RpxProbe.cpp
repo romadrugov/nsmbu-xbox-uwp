@@ -462,10 +462,11 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                                                 const int bootRc = nsmbu_r7_try_entry(&boot);
                                                 sprintf_s(detail,
                                                     "[rpx/R7] STOP: setup=%d status=%u entry=%08X "
-                                                    "last-pc=%08X lr=%08X r3=%08X entered=%u loops=%u",
+                                                    "last-pc=%08X lr=%08X r3=%08X entered=%u loops=%u coreinit-handled=%u",
                                                     bootRc, boot.status, boot.entry, boot.last_pc,
                                                     boot.last_lr, boot.final_r3,
-                                                    boot.functions_entered, boot.loop_ticks);
+                                                    boot.functions_entered, boot.loop_ticks,
+                                                    boot.handled_coreinit_calls);
                                                 log(detail);
                                                 sprintf_s(detail,
                                                     "[rpx/R7] FIRST BLOCKER: exception=%08X host-pc=%llX reason=%.120s",
