@@ -20,6 +20,8 @@
 #include "recomp_table.h"
 #include "bootfirst_api.h"
 
+static Cpu s_r5_cpu; // Prepared by R5; reused by owner-only R7.
+
 #if defined(NSMBU_R7_ENTRY_PROBE)
 // R7 has to be compiled into the private application explicitly. The current
 // lightweight boot-first runtime has no Cafe OS/scheduler. Fail immediately
@@ -223,9 +225,7 @@ int nsmbu_bootfirst_inspect_table(NSMBUBootTableStatus* report) {
     return report->entry_registered ? 0 : -3;
 }
 
-// R5B diagnostic Cpu instance. Uses the exact ABI the generated PPC
-// functions expect, but **does not** call any generated function.
-static Cpu s_r5_cpu;
+// R5B CPU register snapshot, also used by owner-only R7 bootstrap.
 int nsmbu_r5_prepare_cpu(uint32_t entry, uint32_t stack_base,
                          uint32_t stack_size, uint32_t sda_base,
                          uint32_t sda2_base, NSMBUR5CpuSnapshot* output) {
