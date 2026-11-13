@@ -451,6 +451,10 @@ static void r12_setup_local_state() {
     // host::portable_user_dir() uses NSMBU_USER_DIR for logs, settings,
     // shaders and save state paths. This is set before apply_portable_mode.
     if (_putenv_s("NSMBU_USER_DIR", home.c_str()) != 0) return;
+    // R12B diagnostic: show actual guest waiter/owner states every 5 sec.
+    // These are intentionally set before threads::init and scheduler tick start.
+    if (!std::getenv("NSMBU_THREAD_DUMP")) _putenv_s("NSMBU_THREAD_DUMP", "5");
+    if (!std::getenv("NSMBU_SCHED_STATS")) _putenv_s("NSMBU_SCHED_STATS", "2");
     config::game_dir = home + "/game";
     config::save_dir = home + "/nsmbu/save";
     OutputDebugStringA("[R12] game root mapped to WinRT LocalState/game\r\n");
