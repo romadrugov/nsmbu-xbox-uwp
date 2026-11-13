@@ -20,6 +20,8 @@
 #include "recomp_table.h"
 #include "bootfirst_api.h"
 
+static Cpu s_r5_cpu; // Prepared by R5; reused by owner-only R7.
+
 #if defined(NSMBU_R7_ENTRY_PROBE)
 // R7 has to be compiled into the private application explicitly. The current
 // lightweight boot-first runtime has no Cafe OS/scheduler. Fail immediately
@@ -29,9 +31,44 @@ enum { kR7Exception = 0xE2470001u, kR7MaxFunctions = 20000u,
 static _Atomic(int) s_r7_active = 0;
 static _Atomic(uint32_t) s_r7_funcs = 0;
 static _Atomic(uint32_t) s_r7_loops = 0;
+static _Atomic(uint32_t) s_r7_handled_coreinit = 0;
 static _Atomic(uint32_t) s_r7_last_pc = 0;
 static uint64_t s_r7_start_ms = 0;
 static char s_r7_reason[160];
+// Owner-exclusive emulation of the *already created* desktop main OSThread.
+// Initialized only after RPX SHA/CPU staging and guest memory commitment.
+static uint32_t s_r7_main_thread_address = 0;
+int nsmbu_r7_prepare_main_thread(uint32_t address,
+                                 uint32_t low, uint32_t high,
+                                 uint32_t game_entry) {
+    // Use same 0x6A0-byte OSThread offsets/values as
+    // runtime/src/core/threads.cpp::create_thread, not an arbitrary stub.
+    if (address != 0x60100000u || (address & 7u) ||
+        low != 0x60000000u || high != 0x60100000u ||
+        game_entry != 0x02AA2E50u ||
+        g_recomp_entry_point != game_entry ||
+        s_r5_cpu.pc != game_entry ||
+        s_r5_cpu.r[1] < low || s_r5_cpu.r[1] >= high)
+        return -1;
+    uint8_t* const thread = ppc_ptr(address);
+    // Caller has committed & zeroed the complete 64-KiB guest memory page.
+    memset(thread, 0, 0x6A0u);
+    st32(address + 0x000u, 0x4F53436Fu); // OSContext magic
+    st32(address + 0x004u, 0x6E747874u); // OSContext magic continuation
+    st32(address + 0x304u, 2u);          // core affinity, Espresso core 1
+    st8(address + 0x324u, 1u);           // osthread::READY at creation
+    st8(address + 0x325u, 2u);           // thread attribute / affinity
+    st16(address + 0x326u, 1u);          // first thread ID
+    st32(address + 0x328u, 0u);          // not suspended
+    st32(address + 0x32Cu, 16u);         // effective priority
+    st32(address + 0x330u, 16u);         // base priority
+    st32(address + 0x394u, high);        // stack base/top
+    st32(address + 0x398u, low);         // stack end/bottom
+    st32(address + 0x39Cu, game_entry);  // thread entrypoint
+    s_r7_main_thread_address = address;
+    return 0;
+}
+
 static void r7_abort(const char* reason) {
     if (reason && reason != s_r7_reason)
         (void)snprintf(s_r7_reason, sizeof(s_r7_reason), "%s", reason);
@@ -129,6 +166,28 @@ void ppc_preempt(Cpu* cpu) {
 /* Upstream desktop runtime returns 0 for some missing HLEs; deliberately
    fail here so no fake successful Cafe OS behavior can mask a boot problem. */
 void hle_unimplemented(Cpu* cpu, const char* library, const char* name) {
+#if defined(NSMBU_R7_ENTRY_PROBE)
+    if (atomic_load_explicit(&s_r7_active, memory_order_acquire) &&
+        cpu && library && name && strcmp(library, "coreinit") == 0) {
+        if (strcmp(name, "OSGetCurrentThread") == 0 &&
+            s_r7_main_thread_address != 0u) {
+            // Real guest OSThread, not nullptr/pretend success.
+            cpu->r[3] = s_r7_main_thread_address;
+            atomic_fetch_add_explicit(&s_r7_handled_coreinit, 1u, memory_order_relaxed);
+            return;
+        }
+        if (strcmp(name, "OSGetCoreId") == 0) {
+            cpu->r[3] = cpu->core; // matches threads.cpp
+            atomic_fetch_add_explicit(&s_r7_handled_coreinit, 1u, memory_order_relaxed);
+            return;
+        }
+        if (strcmp(name, "OSMemoryBarrier") == 0) {
+            atomic_thread_fence(memory_order_seq_cst);
+            atomic_fetch_add_explicit(&s_r7_handled_coreinit, 1u, memory_order_relaxed);
+            return;
+        }
+    }
+#endif
     char detail[200];
     (void)snprintf(detail, sizeof(detail), "missing HLE %.70s.%.100s",
                    library ? library : "?", name ? name : "?");
@@ -170,9 +229,7 @@ int nsmbu_bootfirst_inspect_table(NSMBUBootTableStatus* report) {
     return report->entry_registered ? 0 : -3;
 }
 
-// R5B diagnostic Cpu instance. Uses the exact ABI the generated PPC
-// functions expect, but **does not** call any generated function.
-static Cpu s_r5_cpu;
+// R5B CPU register snapshot, also used by owner-only R7 bootstrap.
 int nsmbu_r5_prepare_cpu(uint32_t entry, uint32_t stack_base,
                          uint32_t stack_size, uint32_t sda_base,
                          uint32_t sda2_base, NSMBUR5CpuSnapshot* output) {
@@ -257,6 +314,7 @@ int nsmbu_r7_try_entry(NSMBUR7EntryReport* report) {
     report->entry = g_recomp_entry_point;
     // No guest PC can be passed from user input. The RPX checksum is
     // independently verified by RpxProbe before it calls this routine.
+    if (s_r7_main_thread_address != 0x60100000u) return -4;
     if (g_recomp_entry_point != 0x02AA2E50u ||
         g_recomp_func_count != 84231u ||
         g_recomp_import_count != 2821u ||
@@ -273,6 +331,7 @@ int nsmbu_r7_try_entry(NSMBUR7EntryReport* report) {
     s_r7_reason[0] = 0;
     atomic_store_explicit(&s_r7_funcs, 0, memory_order_relaxed);
     atomic_store_explicit(&s_r7_loops, 0, memory_order_relaxed);
+    atomic_store_explicit(&s_r7_handled_coreinit, 0, memory_order_relaxed);
     atomic_store_explicit(&s_r7_last_pc, cpu.pc, memory_order_relaxed);
     s_r7_start_ms = GetTickCount64();
     g_ppc_trace = 1;
@@ -284,6 +343,8 @@ int nsmbu_r7_try_entry(NSMBUR7EntryReport* report) {
         atomic_load_explicit(&s_r7_funcs, memory_order_relaxed);
     report->loop_ticks =
         atomic_load_explicit(&s_r7_loops, memory_order_relaxed);
+    report->handled_coreinit_calls =
+        atomic_load_explicit(&s_r7_handled_coreinit, memory_order_relaxed);
     report->last_pc =
         atomic_load_explicit(&s_r7_last_pc, memory_order_relaxed);
     report->last_lr = cpu.lr;

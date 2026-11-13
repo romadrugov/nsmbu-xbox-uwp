@@ -428,23 +428,55 @@ void run(xboxguest::GuestVm& guest, void (*log)(const char*),
                                         reloc.invalid_symbols == 0 &&
                                         reloc.target_outside_section == 0 &&
                                         reloc.rela_sections == 3) {
-                                        log("[rpx/R7] BEGIN owner-private real entrypoint attempt (no Cafe OS yet)");
-                                        NSMBUR7EntryReport boot{};
-                                        const int bootRc = nsmbu_r7_try_entry(&boot);
-                                        sprintf_s(detail,
-                                            "[rpx/R7] STOP: setup=%d status=%u entry=%08X "
-                                            "last-pc=%08X lr=%08X r3=%08X entered=%u loops=%u",
-                                            bootRc, boot.status, boot.entry, boot.last_pc,
-                                            boot.last_lr, boot.final_r3,
-                                            boot.functions_entered, boot.loop_ticks);
-                                        log(detail);
-                                        sprintf_s(detail,
-                                            "[rpx/R7] FIRST BLOCKER: exception=%08X host-pc=%llX reason=%.120s",
-                                            boot.seh_code,
-                                            static_cast<unsigned long long>(boot.exception_address),
-                                            boot.stop_reason);
-                                        log(detail);
-                                        log("[rpx/R7] ENTRY attempt ended; menu/gameplay/render frame NOT confirmed");
+                                        // Match upstream threads.cpp::create_thread:
+                                        // real 0x6A0-byte OSThread in separate guest heap memory,
+                                        // stack top/bottom, core1 affinity and a real thread ID.
+                                        // No invented null pointer from OSGetCurrentThread.
+                                        constexpr uint32_t kThreadAddress = 0x60100000u;
+                                        constexpr uint32_t kMainStackBase = 0x60000000u;
+                                        constexpr uint32_t kThreadCommitBytes = 0x10000u;
+                                        if (!guest.commit(kThreadAddress, kThreadCommitBytes)) {
+                                            sprintf_s(detail,
+                                                "[rpx/R7B] SKIP: guest thread page commit Win32=%lu",
+                                                static_cast<unsigned long>(guest.last_error()));
+                                            log(detail);
+                                        } else {
+                                            std::memset(guest.ptr(kThreadAddress), 0, kThreadCommitBytes);
+                                            const int threadRc = nsmbu_r7_prepare_main_thread(
+                                                kThreadAddress, kMainStackBase,
+                                                kThreadAddress, startup.entry);
+                                            if (threadRc != 0) {
+                                                sprintf_s(detail,
+                                                    "[rpx/R7B] SKIP: invalid guest OSThread status=%d",
+                                                    threadRc);
+                                                log(detail);
+                                            } else {
+                                                sprintf_s(detail,
+                                                    "[rpx/R7B] MAIN OSThread READY: addr=%08X bytes=%u "
+                                                    "stack=%08X..%08X core=1, no scheduler yet",
+                                                    kThreadAddress, 0x6A0u,
+                                                    kMainStackBase, kThreadAddress);
+                                                log(detail);
+                                                log("[rpx/R7] BEGIN real entry with three bounded coreinit services");
+                                                NSMBUR7EntryReport boot{};
+                                                const int bootRc = nsmbu_r7_try_entry(&boot);
+                                                sprintf_s(detail,
+                                                    "[rpx/R7] STOP: setup=%d status=%u entry=%08X "
+                                                    "last-pc=%08X lr=%08X r3=%08X entered=%u loops=%u coreinit-handled=%u",
+                                                    bootRc, boot.status, boot.entry, boot.last_pc,
+                                                    boot.last_lr, boot.final_r3,
+                                                    boot.functions_entered, boot.loop_ticks,
+                                                    boot.handled_coreinit_calls);
+                                                log(detail);
+                                                sprintf_s(detail,
+                                                    "[rpx/R7] FIRST BLOCKER: exception=%08X host-pc=%llX reason=%.120s",
+                                                    boot.seh_code,
+                                                    static_cast<unsigned long long>(boot.exception_address),
+                                                    boot.stop_reason);
+                                                log(detail);
+                                                log("[rpx/R7] ENTRY attempt ended; menu/gameplay/frame NOT confirmed");
+                                            }
+                                        }
                                     } else {
                                         log("[rpx/R7] SKIP: exact build or relocation integrity gate failed");
                                     }

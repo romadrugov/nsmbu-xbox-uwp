@@ -92,6 +92,7 @@ typedef struct NSMBUR7EntryReport {
     uint32_t final_r3;
     uint32_t functions_entered;
     uint32_t loop_ticks;
+    uint32_t handled_coreinit_calls;
     uint32_t seh_code;
     uint64_t exception_address;
     char stop_reason[160];
@@ -100,6 +101,13 @@ typedef struct NSMBUR7EntryReport {
 // by the caller before invoking this routine. Requires R7 compile opt-in.
 // Return negative on rejected preflight; otherwise report.status identifies
 // whether the entrypoint returned or the guarded execution stopped.
+// R7B: create a real, guest-backed minimal OSThread like the desktop
+// threads::create_thread() startup layout. Caller commits the guest pages
+// before using this function. No scheduler/secondary threads are implied.
+int nsmbu_r7_prepare_main_thread(uint32_t guest_address,
+                                 uint32_t stack_low,
+                                 uint32_t stack_high,
+                                 uint32_t game_entry);
 int nsmbu_r7_try_entry(NSMBUR7EntryReport* report);
 void nsmbu_bootfirst_shutdown_dispatch(void);
 uint32_t nsmbu_bootfirst_trace_count(void);
