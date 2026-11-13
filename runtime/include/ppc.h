@@ -70,6 +70,16 @@ void ppc_preempt(Cpu* c);
 #ifdef NSMBU_R7_GUEST_BUDGET
 void nsmbu_r7_loop_tick(void);
 #define PPC_LOOP() do { __asm__ __volatile__("" ::: "memory"); nsmbu_r7_loop_tick(); } while (0)
+#elif defined(NSMBU_R12B_COOPERATIVE_LOOPS)
+/* R12B Xbox-only: the private PPC recompiler emits PPC_LOOP() at back-edges.
+ * In R12 these were empty, allowing a busy audio loop to monopolize guest
+ * core 0 even after the scheduler requested preemption. Check on back-edges
+ * as well as on PPC_ENTER; preserve the entire Cpu state across a yield.
+ * Do not affect host desktop, R7D, or source builds without this opt-in. */
+#define PPC_LOOP() do { \
+    __asm__ __volatile__("" ::: "memory"); \
+    if (__builtin_expect(g_core_preempt[c->core], 0)) ppc_preempt(c); \
+} while (0)
 #else
 #define PPC_LOOP() __asm__ __volatile__("" ::: "memory")
 #endif
