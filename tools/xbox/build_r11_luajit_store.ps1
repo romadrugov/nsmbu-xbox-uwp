@@ -50,6 +50,16 @@ $anchor = ' /nologo /c /O2 /W3 '
 if (-not $text.Contains($anchor)) { throw 'Pinned LuaJIT build command layout changed' }
 $text = $text.Replace($anchor,
   ' /nologo /c /O2 /W3 /MD /DLUAJIT_DISABLE_FFI /DLUAJIT_DISABLE_JIT ')
+# The upstream DynASM flags must match the compiled VM feature macros.
+# With LUAJIT_DISABLE_JIT/FFI, generating a JIT/FFI-enabled buildvm_arch.h
+# references jit_State, CTState and GG_State.J that no longer exist.
+# Keep the real fast interpreter; omit only the incompatible VM extensions.
+$dasmFeatures = '-D WIN -D JIT -D FFI -D ENDIAN_LE -D FPU'
+$dasmInterpreter = '-D WIN -D ENDIAN_LE -D FPU'
+if (([regex]::Matches($text, [regex]::Escape($dasmFeatures))).Count -ne 2) {
+  throw 'Pinned LuaJIT DynASM x86/x64 flags changed; cannot safely build interpreter-only VM'
+}
+$text = $text.Replace($dasmFeatures, $dasmInterpreter)
 # Run native LuaJIT generators on the desktop CI host, not under Windows
 # Store CRT. Upstream msvcbuild.bat wraps host invocations in nested
 # SETLOCAL/ENDLOCAL blocks; only those blocks switch to desktop x64.
