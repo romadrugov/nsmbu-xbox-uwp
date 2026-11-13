@@ -1,4 +1,4 @@
-# R12: privately package the real R11 WindowsStore x64 game executable
+# R12B: privately package the real R11 WindowsStore x64 game executable
 # with the exact R9-tested Mesa Dozen/DXIL binaries. NEVER include a game dump.
 [CmdletBinding()]
 param(
@@ -93,7 +93,7 @@ $secure = ConvertTo-SecureString $password -AsPlainText -Force
 $pfx = Join-Path $env:RUNNER_TEMP 'r12-ephemeral-signing.pfx'
 Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $secure | Out-Null
 Export-Certificate -Cert $cert -FilePath (Join-Path $out 'NSMBUFullRuntimeR12.cer') | Out-Null
-$appx = Join-Path $out 'NSMBUFullRuntime_R12_0.1.0.0_x64.appx'
+$appx = Join-Path $out 'NSMBUFullRuntime_R12B_0.1.0.1_x64.appx'
 & $makeappx pack /d $stage /p $appx /o
 if ($LASTEXITCODE -ne 0) { throw 'R12 AppX packaging failed' }
 & $signtool sign /fd SHA256 /f $pfx /p $password $appx
@@ -135,7 +135,7 @@ if ($cms.SignerInfos.Count -ne 1 -or
 }
 Write-Host '[R12] Embedded PKCS#7 signature valid and matches exported signer (offline)'
 $report = @(
-  'R12 Xbox UWP signed install package PASS (CI only, no hardware boot proven)'
+  'R12B Xbox UWP signed install package PASS (CI only, no hardware boot proven)'
   "R11 EXE SHA256=$((Get-FileHash $exe -Algorithm SHA256).Hash)"
   "Dozen SHA256=$((Get-FileHash (Join-Path $prior 'vulkan_dzn.dll') -Algorithm SHA256).Hash)"
   "DXIL SHA256=$((Get-FileHash (Join-Path $prior 'dxil.dll') -Algorithm SHA256).Hash)"
@@ -149,5 +149,5 @@ $report = @(
 )
 $report | Set-Content -LiteralPath (Join-Path $out 'R12-build-report.txt') -Encoding utf8
 Remove-Item -LiteralPath $prior,$stage,$verify -Force -Recurse
-Write-Host 'R12 SIGNED PRIVATE GAME APPX PASS. Device startup remains unverified.'
+Write-Host 'R12B SIGNED PRIVATE GAME APPX PASS. Device startup remains unverified.'
 Write-Host "R12 AppX SHA256: $((Get-FileHash $appx -Algorithm SHA256).Hash)"
