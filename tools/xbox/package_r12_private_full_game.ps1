@@ -98,6 +98,10 @@ $appx = Join-Path $out 'NSMBUFullRuntime_R12_0.1.0.0_x64.appx'
 if ($LASTEXITCODE -ne 0) { throw 'R12 AppX packaging failed' }
 & $signtool sign /fd SHA256 /f $pfx /p $password $appx
 if ($LASTEXITCODE -ne 0) { throw 'R12 AppX signing failed' }
+# Trust only this ephemeral test certificate on the disposable CI worker,
+# so WinVerifyTrust can validate the complete signed AppX chain.
+# Users will separately install the exported .cer on their own console.
+Import-Certificate -FilePath (Join-Path $out 'NSMBUFullRuntimeR12.cer') -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
 & $signtool verify /pa $appx
 if ($LASTEXITCODE -ne 0) { throw 'R12 AppX Authenticode verification failed' }
 $verify = Join-Path $out 'verified'
