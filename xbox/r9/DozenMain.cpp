@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <cstdio>
 #include <cstring>
+#include <exception>
 #include <string>
 #include "DozenFrame.h"
 
@@ -36,8 +37,8 @@ void OpenLog() {
 }
 public ref class App sealed : IFrameworkView {
 public:
-    virtual void Initialize(CoreApplicationView^ view) {
-        view->Activated += ref new Windows::Foundation::TypedEventHandler<
+    virtual void Initialize(CoreApplicationView^ applicationView) {
+        applicationView->Activated += ref new Windows::Foundation::TypedEventHandler<
             CoreApplicationView^,
             Windows::ApplicationModel::Activation::IActivatedEventArgs^>(
             this, &App::OnActivated);
@@ -47,7 +48,7 @@ public:
         window_->Closed += ref new Windows::Foundation::TypedEventHandler<
             CoreWindow^, CoreWindowEventArgs^>(this, &App::OnClosed);
     }
-    virtual void Load(Platform::String^) {}
+    virtual void Load(Platform::String^ entryPoint) { (void)entryPoint; }
     virtual void Run() {
         window_->Dispatcher->ProcessEvents(
             CoreProcessEventsOption::ProcessAllIfPresent);
