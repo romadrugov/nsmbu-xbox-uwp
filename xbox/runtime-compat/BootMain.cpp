@@ -38,7 +38,7 @@ void OpenLog() noexcept {
     try {
         auto folder = Windows::Storage::ApplicationData::Current->LocalFolder;
         std::wstring path(folder->Path->Data());
-        path += L"\\nsmbu_r7c_real_entrypoint.txt";
+        path += L"\\nsmbu_r7d_real_entrypoint.txt";
         g_logFile = CreateFile2(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
                                 CREATE_ALWAYS, nullptr);
     } catch (...) {
@@ -82,7 +82,7 @@ bool CheckSparseGuestMemory(xboxguest::GuestVm& vm) {
 
 void RunPreflight() {
 #if defined(NSMBU_R7_ENTRY_PROBE)
-    Log("R7C owner opted in: bounded game entry with debugger/coreinit HLE, stop at first blocker");
+    Log("R7D owner opted in: coreinit memory copy/set + bounded real game entry");
 #elif defined(NSMBU_R6A_EXECUTE_LEAF)
     Log("R6A owner opted in: one strictly validated native game leaf may execute");
 #else
