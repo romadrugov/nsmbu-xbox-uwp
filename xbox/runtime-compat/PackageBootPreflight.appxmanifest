@@ -19,7 +19,7 @@
   <Applications>
     <Application Id="App" Executable="NSMBUBootPreflight.exe" EntryPoint="NSMBUBootPreflight.App">
       <uap:VisualElements
-        DisplayName="NSMBU R7B Threaded Entry Probe"
+        DisplayName="NSMBU R7C Debugger HLE Probe"
         Description="Private opt-in actual entrypoint attempt with first blocker capture; gameplay not yet supported"
         BackgroundColor="#183347"
         Square150x150Logo="Assets\Square150x150Logo.png"
