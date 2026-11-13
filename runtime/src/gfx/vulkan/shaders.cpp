@@ -19,7 +19,13 @@
 #include "util/helpers/StringBuf.h"
 #include <glslang/Public/ShaderLang.h>
 #include <glslang/Public/ResourceLimits.h>
+#if defined(NSMBU_XBOX_UWP)
+// Pinned glslang has SPIRV/GlslangToSpv.h at its source root; the
+// installed desktop layout may instead expose glslang/SPIRV/...
+#include <SPIRV/GlslangToSpv.h>
+#else
 #include <glslang/SPIRV/GlslangToSpv.h>
+#endif
 #include <memory>
 #include <filesystem>
 #include <glslang/build_info.h>

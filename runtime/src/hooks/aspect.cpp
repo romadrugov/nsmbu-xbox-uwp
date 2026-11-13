@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <numbers>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
@@ -61,8 +62,8 @@ void remember(float v) {
 bool standard_aspect(float v) { return same(v, kBase) || same(v, g_game) || ours(v); }
 float vert_plus_fovy(float fovyDeg, float ky) {
     if (ky == 1.0f) return fovyDeg;
-    float t = std::tan(fovyDeg * 0.5f * (float)M_PI / 180.0f) * ky;
-    return 2.0f * std::atan(t) * 180.0f / (float)M_PI;
+    float t = std::tan(fovyDeg * 0.5f * std::numbers::pi_v<float> / 180.0f) * ky;
+    return 2.0f * std::atan(t) * 180.0f / std::numbers::pi_v<float>;
 }
 
 bool original() { return g_game == kBase; }

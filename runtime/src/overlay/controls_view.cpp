@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <functional>
 #include <string>
 #include <vector>
@@ -546,7 +547,7 @@ void draw_controls(ControlsView& v, float w, float h) {
                 conflict |= has_conflict(m, p.dirs[q]);
             }
             dl->AddCircle(p.c, p.R, dirHot ? P.accent : conflict ? P.warn : P.outline, 0, dirHot || conflict ? 2.0f : 1.2f);
-            const float ang[4] = {-(float)M_PI_2, (float)M_PI_2, (float)M_PI, 0};
+            const float ang[4] = {-(std::numbers::pi_v<float> * 0.5f), (std::numbers::pi_v<float> * 0.5f), std::numbers::pi_v<float>, 0};
             for (int q = 0; q < 4; q++) {
                 int a = p.dirs[q];
                 float r0 = p.R * 0.83f;
@@ -585,7 +586,7 @@ void draw_controls(ControlsView& v, float w, float h) {
                 ImU32 rc = ring(p.action, &wd);
                 if (lit(p.action)) dl->AddRectFilled(p.a, p.b, P.fill, rr);
                 dl->AddRect(p.a, p.b, rc, rr, rc == P.outline ? 1.2f : wd);
-                const float ang[4] = {-(float)M_PI_2, (float)M_PI_2, (float)M_PI, 0};
+                const float ang[4] = {-(std::numbers::pi_v<float> * 0.5f), (std::numbers::pi_v<float> * 0.5f), std::numbers::pi_v<float>, 0};
                 triangle(dl, ImVec2((p.a.x + p.b.x) / 2, (p.a.y + p.b.y) / 2), ang[p.dirs[0]], W * 0.22f,
                          lit(p.action) ? P.white : P.outline);
             }

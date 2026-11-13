@@ -430,8 +430,8 @@ int main(int argc, char** argv) {
         if (*warm && std::strcmp(warm, "0")) std::setvbuf(stderr, nullptr, _IONBF, 0);
     apply_portable_mode();
     default_vulkan_cpu_paths();
-#ifdef _WIN32
-
+#if defined(_WIN32) && !defined(NSMBU_XBOX_UWP)
+    // Desktop Windows timer-resolution API is not available in AppContainer.
     timeBeginPeriod(1);
 #endif
 #ifdef __ANDROID__

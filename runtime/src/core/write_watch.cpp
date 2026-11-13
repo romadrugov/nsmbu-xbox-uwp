@@ -69,6 +69,13 @@ bool on_write_fault(uintptr_t a) {
 }
 
 #ifdef _WIN32
+#if defined(NSMBU_XBOX_UWP)
+// Windows Store headers do not expose AddVectoredExceptionHandler.
+// Disable write-watch fault trapping: the existing renderer has a sampled
+// change-detection fallback when wwatch::init() returns false.
+// Do not substitute undocumented desktop exception APIs in AppContainer.
+bool install_handler() { return false; }
+#else
 LONG CALLBACK veh(EXCEPTION_POINTERS* e) {
     const EXCEPTION_RECORD* r = e->ExceptionRecord;
 
@@ -78,6 +85,7 @@ LONG CALLBACK veh(EXCEPTION_POINTERS* e) {
     return EXCEPTION_CONTINUE_SEARCH;
 }
 bool install_handler() { return AddVectoredExceptionHandler(1, veh) != nullptr; }
+#endif
 #else
 struct sigaction g_old_segv, g_old_bus;
 void handler(int sig, siginfo_t* si, void* uc) {
