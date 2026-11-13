@@ -22,8 +22,10 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#if !defined(NSMBU_XBOX_UWP)
 #include <commctrl.h>
 #include <shellapi.h>
+#endif
 #include <windows.h>
 #endif
 #if defined(NSMBU_SDL_HOST)
@@ -102,7 +104,7 @@ std::string trim_ws(std::string s) {
 }
 
 std::string cpu_label() {
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(NSMBU_XBOX_UWP)
     wchar_t buf[256];
     DWORD size = sizeof buf;
     if (RegGetValueW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
@@ -250,7 +252,16 @@ Choice sdl_ask(const std::string& message) {
 }
 #endif
 
-#ifdef _WIN32
+#if defined(NSMBU_XBOX_UWP)
+Choice win_ask(const std::string& message) {
+    // Desktop TaskDialog/MessageBox are forbidden by Windows Store headers.
+    // Preserve the real error in debug/owner logs and do not fake a dialog.
+    OutputDebugStringA("[NSMBU UWP] ");
+    OutputDebugStringA(message.c_str());
+    OutputDebugStringA("\r\n");
+    return kOk;
+}
+#elif defined(_WIN32)
 Choice win_ask(const std::string& message) {
     const int n = MultiByteToWideChar(CP_UTF8, 0, message.c_str(), -1, nullptr, 0);
     const int tn = MultiByteToWideChar(CP_UTF8, 0, app_title::kName, -1, nullptr, 0);
@@ -397,7 +408,10 @@ std::string report_issue_url(const std::string& message, IssueKind kind) {
 }
 
 void open_url(const char* url) {
-#ifdef _WIN32
+#if defined(NSMBU_XBOX_UWP)
+    // Xbox has no ShellExecute; preserve the requested URL for diagnostics.
+    if (url) { OutputDebugStringA("[NSMBU UWP] URL: "); OutputDebugStringA(url); OutputDebugStringA("\r\n"); }
+#elif defined(_WIN32)
     ShellExecuteA(nullptr, "open", url, nullptr, nullptr, SW_SHOWNORMAL);
 #elif defined(NSMBU_SDL_HOST)
     if (!SDL_OpenURL(url)) LOG("[user_error] cannot open %s: %s", url, SDL_GetError());
@@ -414,7 +428,12 @@ void open_url(const char* url) {
 void open_logs_folder() {
     host::ensure_log_dir();
     const std::string dir = host::log_dir();
-#ifdef _WIN32
+#if defined(NSMBU_XBOX_UWP)
+    // Logs are accessible in the app's LocalState through Device Portal.
+    OutputDebugStringA("[NSMBU UWP] Logs: ");
+    OutputDebugStringA(dir.c_str());
+    OutputDebugStringA("\r\n");
+#elif defined(_WIN32)
     ShellExecuteA(nullptr, "explore", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #elif defined(NSMBU_SDL_HOST)
     std::error_code ec;
