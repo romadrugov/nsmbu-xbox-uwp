@@ -79,11 +79,21 @@ def reconstruct(source: Path, destination: Path, hooked: set[str]) -> int:
 
     funcs = header.read_text(encoding="utf-8")
     declared = set(DECL.findall(funcs))
-    missing = hooked - declared
-    if missing:
-        raise ValueError(f"Hook targets absent from generated table/header: {len(missing)}")
     if re.search(r"\bvoid f_[0-9A-F]{8}_orig\s*\(", funcs):
         raise ValueError("The source is already hooked; do not apply compatibility bridge")
+
+    present = hooked & declared
+    missing = hooked - declared
+    if not present:
+        raise ValueError("No applicable native hooks exist in this private build")
+    # Some canonical hook targets aren't emitted as whole functions in the
+    # exact USA_V0 base-disc build. That is legitimate ONLY when both the
+    # generated native function table and every private code unit omit the
+    # symbol. Never invent a game body or a fake success for that address.
+    table = (source / "table.c").read_text(encoding="utf-8")
+    for addr in sorted(missing):
+        if re.search(r"\bf_" + addr + r"\b", table):
+            raise ValueError("Missing hook definition is still in dispatch table")
 
     # Preflight all 93 code files before creating any output. Never rewrite
     # non-target names, direct calls, or the generated function table.
@@ -107,9 +117,13 @@ def reconstruct(source: Path, destination: Path, hooked: set[str]) -> int:
                     f"void f_{addr}_orig(Cpu* __restrict c) {{")
 
         rewritten[path.name] = FUNC_DEF.sub(wrap, raw)
-    if any(occurrences.get(name) != 1 for name in hooked):
-        bad = sum(occurrences.get(name) != 1 for name in hooked)
-        raise ValueError(f"{bad} hook targets do not have exactly one native definition")
+    # Reject a supposed "absent" hook whose game body secretly exists.
+    # This catches stale/malformed funcs.h without a new game-code stub.
+    if any(occurrences.get(name, 0) != 0 for name in missing):
+        raise ValueError("Hook absent from header is still defined in game C")
+    if any(occurrences.get(name) != 1 for name in present):
+        bad = sum(occurrences.get(name) != 1 for name in present)
+        raise ValueError(f"{bad} declared hook targets do not have exactly one native definition")
 
     shutil.copytree(source, destination)
     for name, src in rewritten.items():
@@ -118,13 +132,15 @@ def reconstruct(source: Path, destination: Path, hooked: set[str]) -> int:
     new_prototypes = [
         "\n/* R8 temporary entry-hook ABI; private hooked recompile preferred. */",
     ]
-    for addr in sorted(hooked):
+    for addr in sorted(present):
         new_prototypes.append(f"void f_{addr}_orig(Cpu* __restrict c);")
         new_prototypes.append(f"void hook_{addr}(Cpu* c);")
     (destination / "funcs.h").write_text(
         funcs.rstrip() + "\n" + "\n".join(new_prototypes) + "\n",
         encoding="utf-8",
     )
+    if missing:
+        print(f"R8: skipping {len(missing)} hook target(s) absent from BOTH verified generated table and code; no substitute game body")
     return len(occurrences)
 
 
