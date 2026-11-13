@@ -98,12 +98,11 @@ $appx = Join-Path $out 'NSMBUFullRuntime_R12_0.1.0.0_x64.appx'
 if ($LASTEXITCODE -ne 0) { throw 'R12 AppX packaging failed' }
 & $signtool sign /fd SHA256 /f $pfx /p $password $appx
 if ($LASTEXITCODE -ne 0) { throw 'R12 AppX signing failed' }
-# Trust only this ephemeral test certificate on the disposable CI worker,
-# so WinVerifyTrust can validate the complete signed AppX chain.
-# Users will separately install the exported .cer on their own console.
-Import-Certificate -FilePath (Join-Path $out 'NSMBUFullRuntimeR12.cer') -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
-& $signtool verify /pa $appx
-if ($LASTEXITCODE -ne 0) { throw 'R12 AppX Authenticode verification failed' }
+# Do not import an untrusted self-signed cert into the runner Root store:
+# certificate import or on-line WinVerifyTrust revocation can block a
+# headless GitHub runner indefinitely. SignTool has already succeeded.
+# The embedded PKCS#7 signature is verified offline below after unpacking.
+Write-Host '[R12] Signed AppX created; checking package payload and PKCS#7 signature offline'
 $verify = Join-Path $out 'verified'
 & $makeappx unpack /p $appx /d $verify /o
 if ($LASTEXITCODE -ne 0) { throw 'R12 signed AppX unpack failed' }
@@ -115,6 +114,26 @@ if ((Get-FileHash $exe -Algorithm SHA256).Hash -cne
     (Get-FileHash (Join-Path $verify 'NSMBUFullRuntimeR11.exe') -Algorithm SHA256).Hash) {
   throw 'Packaged executable differs from successful private link'
 }
+# AppX stores signed CMS as the ASCII "PKCX" header plus DER PKCS#7.
+# Check the cryptographic signature itself without network/certificate-chain
+# validation. The Xbox validates the developer certificate on installation.
+$signature = Join-Path $verify 'AppxSignature.p7x'
+if (-not (Test-Path -LiteralPath $signature)) { throw 'Signed AppX lacks AppxSignature.p7x' }
+$rawCms = [IO.File]::ReadAllBytes($signature)
+if ($rawCms.Length -lt 256 -or [Text.Encoding]::ASCII.GetString($rawCms, 0, 4) -cne 'PKCX') {
+  throw 'AppX signature missing standard PKCX header'
+}
+$cmsDer = New-Object byte[] ($rawCms.Length - 4)
+[Array]::Copy($rawCms, 4, $cmsDer, 0, $cmsDer.Length)
+$cms = [System.Security.Cryptography.Pkcs.SignedCms]::new()
+$cms.Decode($cmsDer)
+$cms.CheckSignature($true) # cryptographic check only; cannot hang on online revocation
+if ($cms.SignerInfos.Count -ne 1 -or
+    -not $cms.SignerInfos[0].Certificate -or
+    $cms.SignerInfos[0].Certificate.Thumbprint -cne $cert.Thumbprint) {
+  throw 'R12 AppX embedded signer does not match the exported development certificate'
+}
+Write-Host '[R12] Embedded PKCS#7 signature valid and matches exported signer (offline)'
 $report = @(
   'R12 Xbox UWP signed install package PASS (CI only, no hardware boot proven)'
   "R11 EXE SHA256=$((Get-FileHash $exe -Algorithm SHA256).Hash)"
@@ -123,6 +142,7 @@ $report = @(
   "AppX SHA256=$((Get-FileHash $appx -Algorithm SHA256).Hash)"
   "AppX bytes=$((Get-Item $appx).Length)"
   'Dozen/DXIL origin: Series S-tested R9 open-source artifact run 43433286834'
+  'Offline PKCS#7 CheckSignature(true) PASS; signer matches exported .cer; certificate chain deliberately not validated on runner.'
   'Compiled owner game code is inside private EXE; no original game dump included.'
   'Full code/content/meta must be placed in app LocalState/game to play.'
   'App activation, memory, actual game frame NOT yet tested.'
