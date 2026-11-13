@@ -4,10 +4,10 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
   IgnorableNamespaces="uap mp">
-  <Identity Name="Romadrugov.NSMBUXboxBootPreflight" Publisher="CN=NSMBUXbox" Version="0.9.2.0" ProcessorArchitecture="x64" />
+  <Identity Name="Romadrugov.NSMBUXboxBootPreflight" Publisher="CN=NSMBUXbox" Version="0.9.3.0" ProcessorArchitecture="x64" />
   <mp:PhoneIdentity PhoneProductId="fe0d0f71-b9be-4d4c-a8d4-3caac439e19e" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
-    <DisplayName>NSMBU Xbox R7C Debugger HLE Probe</DisplayName>
+    <DisplayName>NSMBU Xbox R7D Memory HLE Probe</DisplayName>
     <PublisherDisplayName>NSMBU Xbox Project</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -19,7 +19,7 @@
   <Applications>
     <Application Id="App" Executable="NSMBUBootPreflight.exe" EntryPoint="NSMBUBootPreflight.App">
       <uap:VisualElements
-        DisplayName="NSMBU R7C Debugger HLE Probe"
+        DisplayName="NSMBU R7D Memory HLE Probe"
         Description="Private opt-in actual entrypoint attempt with first blocker capture; gameplay not yet supported"
         BackgroundColor="#183347"
         Square150x150Logo="Assets\Square150x150Logo.png"
