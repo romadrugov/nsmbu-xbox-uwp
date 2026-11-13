@@ -44,8 +44,9 @@ if (-not $env:VSCMD_ARG_TGT_ARCH -or $env:VSCMD_ARG_TGT_ARCH -ne 'x64') {
 }
 $kit = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Windows Kits/10'
 $d3d12Lib = @(Get-ChildItem (Join-Path $kit 'Lib') -Directory |
-  Where-Object { $_.Name -match '^10\.0\.\d+\.0
-  ForEach-Object { Join-Path $_.FullName 'um/x64/d3d12.lib' } |
+  Where-Object { $_.Name -match '^10\.0\.\d+\.0$' } |
+  Sort-Object { [version]$_.Name } -Descending |
+  ForEach-Object { Join-Path -Path $_.FullName -ChildPath 'um/x64/d3d12.lib' } |
   Where-Object { Test-Path $_ } | Select-Object -First 1)
 if ($d3d12Lib.Count -ne 1) { throw 'SDK d3d12.lib missing' }
 $env:LIB = "$(Split-Path $d3d12Lib[0] -Parent);$env:LIB"
