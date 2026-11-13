@@ -93,6 +93,10 @@ typedef struct NSMBUR7EntryReport {
     uint32_t functions_entered;
     uint32_t loop_ticks;
     uint32_t handled_coreinit_calls;
+    uint32_t handled_memory_calls;    // OSBlockMove/Set, memcpy/memmove/memset
+    uint32_t last_mem_dst;           // owner-only trace; first failure evidence
+    uint32_t last_mem_src_or_value;
+    uint32_t last_mem_bytes;
     uint32_t seh_code;
     uint64_t exception_address;
     char stop_reason[160];
