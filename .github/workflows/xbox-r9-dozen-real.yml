@@ -1,0 +1,95 @@
+name: R9 real Xbox UWP Mesa Dozen + signed Vulkan AppX (PUBLIC)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/r9-full-uwp-dozen-series-s
+    paths:
+      - "tools/xbox/build_r9_mesa_dozen.ps1"
+      - ".github/workflows/xbox-r9-dozen-real.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dozen-uwp:
+    runs-on: windows-2022
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: jajdp/smash4-xbox
+          ref: 50ed2e91d9ae0aadfac5cf48777c8a825c5231e9
+          persist-credentials: false
+          path: smash4-reference
+      - uses: actions/checkout@v4
+        with:
+          repository: KhronosGroup/Vulkan-Headers
+          ref: 88487f687f3100ebe1d3559a8a34d971ee85b977
+          persist-credentials: false
+          path: deps/vulkan-headers
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirm host Python toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & python --version
+          & python -m pip --version
+          if ($LASTEXITCODE -ne 0) { throw 'Python 3.12 setup failed' }
+      - name: Build actual AppContainer-compatible Dozen from Mesa 26.2.6
+        shell: pwsh
+        timeout-minutes: 275
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $mesa = Join-Path $env:RUNNER_TEMP 'm'
+          & '.\tools\xbox\build_r9_mesa_dozen.ps1' -MesaRoot $mesa -SmashSource '.\smash4-reference'
+          if ($LASTEXITCODE -ne 0) { throw 'Mesa Dozen UWP build failed' }
+          $dll = Join-Path $mesa 'build-uwp/src/microsoft/vulkan/vulkan_dzn.dll'
+          if (-not (Test-Path $dll)) { throw 'No Vulkan Dozen ICD produced' }
+          "R9_DOZEN_DLL=$dll" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Find DXIL runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $kit = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Windows Kits/10'
+          $candidates = @(
+            (Join-Path $kit 'Redist/D3D/x64/dxil.dll'),
+            (Join-Path $kit 'Redist/10.0.26100.0/D3D/x64/dxil.dll'),
+            'C:\Windows\System32\dxil.dll'
+          )
+          $found = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $found) { throw 'DXIL.dll unavailable; need UWP redistribution package' }
+          $version = [Diagnostics.FileVersionInfo]::GetVersionInfo($found).FileVersion
+          Write-Host "DXIL source: $found"
+          Write-Host "DXIL version: $version"
+          "R9_DXIL_DLL=$found" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Compile, package and sign real Vulkan/Dozen Xbox UWP probe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:RUNNER_TEMP 'r9-real-uwp-appx'
+          & '.\tools\xbox\build_r9_dozen_probe.ps1' -VulkanHeadersRoot '.\deps\vulkan-headers' -OutputDir $out -DozenDll $env:R9_DOZEN_DLL -DxilDll $env:R9_DXIL_DLL
+          if ($LASTEXITCODE -ne 0) { throw 'AppContainer Vulkan/Dozen packaging failed' }
+          if (-not (Test-Path (Join-Path $out 'NSMBUDozenProbe_R9_x64.appx'))) {
+            throw 'Expected signed real Dozen AppX missing'
+          }
+          Write-Host 'R9 OPEN SOURCE GPU GATE BUILD PASS: ready for actual Xbox Series S test'
+          Write-Host 'No game RPX, original files or generated copyrighted source used.'
+
+      - name: Upload Xbox GPU probe (open-source Dozen, NO game)
+        uses: actions/upload-artifact@v4
+        with:
+          name: NSMBU_R9_UWP_Dozen_GPU_probe
+          path: |
+            ${{ runner.temp }}\r9-real-uwp-appx\NSMBUDozenProbe_R9_x64.appx
+            ${{ runner.temp }}\r9-real-uwp-appx\NSMBUDozenProbe.cer
+            ${{ runner.temp }}\r9-real-uwp-appx\Microsoft.VCLibs.x64.14.00.appx
+          if-no-files-found: error
+          retention-days: 14
