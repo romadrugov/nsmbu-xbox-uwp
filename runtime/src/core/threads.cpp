@@ -98,6 +98,15 @@ struct HostThread {
 
     std::chrono::steady_clock::time_point acquired;
     std::atomic<uint64_t> held_ns{0}, wait_ns{0};
+#if defined(NSMBU_R12C_GUEST_TRACE)
+    // Lock-free diagnostic fields: guest execution updates on native thread,
+    // watchdog reads without interrupting it or altering guest registers.
+    std::atomic<uint32_t> diag_entry_addr{0};
+    std::atomic<const char*> diag_entry_name{nullptr};
+    std::atomic<const char*> diag_loop_name{nullptr};
+    std::atomic<uint32_t> diag_loop_line{0};
+    std::atomic<uint64_t> diag_entries{0}, diag_loops{0}, diag_preempt_checks{0};
+#endif
 #ifdef __APPLE__
     mach_port_t mach = 0;
     uint64_t last_cpu_us = 0;
@@ -126,6 +135,37 @@ static std::mutex g_threads_mutex;
 static std::unordered_map<uint32_t, HostThread*> g_threads;
 static thread_local HostThread* t_self = nullptr;
 static thread_local Cpu* t_cpu = nullptr;
+#if defined(NSMBU_R12C_GUEST_TRACE)
+// Only the R12C Xbox diagnostic build exports these from the full runtime.
+// These are safe for C-generated game code and do not modify any guest GPR,
+// CR, FPR, PC or LR. Thread dump can inspect forward progress offline.
+extern "C" void ppc_r12c_guest_enter(Cpu* c, uint32_t addr, const char* function) {
+    (void)c;
+    HostThread* t = t_self;
+    if (!t) return;
+    t->diag_entry_addr.store(addr, std::memory_order_relaxed);
+    t->diag_entry_name.store(function, std::memory_order_relaxed);
+    t->diag_entries.fetch_add(1, std::memory_order_relaxed);
+}
+
+extern "C" void ppc_r12c_guest_loop(Cpu* c, const char* function, unsigned line) {
+    HostThread* t = t_self;
+    if (!t) return;
+    t->diag_loop_name.store(function, std::memory_order_relaxed);
+    t->diag_loop_line.store(line, std::memory_order_relaxed);
+    uint64_t n = t->diag_loops.fetch_add(1, std::memory_order_relaxed) + 1;
+    // This is a *diagnostic* cooperative checkpoint, not a guest-state edit.
+    // Force the scheduler to RECHECK fair ownership occasionally even when
+    // g_core_preempt is not being observed by compiled guest source.
+    if ((n & 1023u) == 0 || g_core_preempt[c->core]) {
+        if (t->holds_core && !t->irq_off) {
+            t->diag_preempt_checks.fetch_add(1, std::memory_order_relaxed);
+            ppc_preempt(c); // existing scheduler decides whether to yield
+        }
+    }
+}
+#endif
+
 static uint32_t g_sda_base, g_sda2_base;
 static uint16_t g_next_id = 1;
 
@@ -2059,6 +2099,20 @@ static void thread_dump_loop(int secs) {
                      w == kRunning ? "RUN " : w == kParked ? "park" : "REQ ", t->wait_kind < 11 ? kinds[t->wait_kind] : "?", t->wait_obj,
                      t->cpu.lr, t->cpu.r[1], t->core, t->holds_core ? " (holds core)" : "");
             out += buf;
+#if defined(NSMBU_R12C_GUEST_TRACE)
+            const char* entry = t->diag_entry_name.load(std::memory_order_relaxed);
+            const char* loop = t->diag_loop_name.load(std::memory_order_relaxed);
+            char diag[320];
+            snprintf(diag, sizeof(diag),
+                     " | guest entry=%08X:%s total=%llu loop=%s:%u total=%llu sched_checks=%llu preempt=%d",
+                     t->diag_entry_addr.load(std::memory_order_relaxed),
+                     entry ? entry : "-", (unsigned long long)t->diag_entries.load(std::memory_order_relaxed),
+                     loop ? loop : "-", t->diag_loop_line.load(std::memory_order_relaxed),
+                     (unsigned long long)t->diag_loops.load(std::memory_order_relaxed),
+                     (unsigned long long)t->diag_preempt_checks.load(std::memory_order_relaxed),
+                     (unsigned)g_core_preempt[t->core]);
+            out += diag;
+#endif
         }
         LOG("[threads]%s", out.c_str());
     }
