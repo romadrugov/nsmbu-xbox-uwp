@@ -93,7 +93,7 @@ $secure = ConvertTo-SecureString $password -AsPlainText -Force
 $pfx = Join-Path $env:RUNNER_TEMP 'r12-ephemeral-signing.pfx'
 Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $secure | Out-Null
 Export-Certificate -Cert $cert -FilePath (Join-Path $out 'NSMBUFullRuntimeR12.cer') | Out-Null
-$appx = Join-Path $out 'NSMBUFullRuntime_R12B_0.1.0.1_x64.appx'
+$appx = Join-Path $out 'NSMBUFullRuntime_R12C_0.1.0.2_x64.appx'
 & $makeappx pack /d $stage /p $appx /o
 if ($LASTEXITCODE -ne 0) { throw 'R12 AppX packaging failed' }
 & $signtool sign /fd SHA256 /f $pfx /p $password $appx
