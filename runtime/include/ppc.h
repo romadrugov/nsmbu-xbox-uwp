@@ -59,7 +59,18 @@ void ppc_trace_enter(uint32_t addr);
 
 extern volatile int g_core_preempt[3];
 void ppc_preempt(Cpu* c);
+#ifdef NSMBU_R12C_GUEST_TRACE
+/* R12C diagnostic only. A guest's LR is *not* its current program counter;
+ * record the translated function and its last back-edge independently.
+ * All identifiers come from the owner's private generated code at runtime. */
+void ppc_r12c_guest_enter(Cpu* c, uint32_t addr, const char* function);
+void ppc_r12c_guest_loop(Cpu* c, const char* function, unsigned line);
+#define R12C_ENTER(a) ppc_r12c_guest_enter(c, a, __func__)
+#else
+#define R12C_ENTER(a) ((void)0)
+#endif
 #define PPC_ENTER(a) do {                                                     \
+        R12C_ENTER(a);                                                         \
         if (__builtin_expect(g_ppc_trace, 0)) ppc_trace_enter(a);             \
         if (__builtin_expect(g_core_preempt[c->core], 0)) ppc_preempt(c);     \
     } while (0)
@@ -70,6 +81,15 @@ void ppc_preempt(Cpu* c);
 #ifdef NSMBU_R7_GUEST_BUDGET
 void nsmbu_r7_loop_tick(void);
 #define PPC_LOOP() do { __asm__ __volatile__("" ::: "memory"); nsmbu_r7_loop_tick(); } while (0)
+#elif defined(NSMBU_R12C_GUEST_TRACE)
+/* Track exact generated function/back-edge progress; existing scheduler
+ * retains ownership and yield decisions. 1024-loop sampling asks the
+ * cooperative scheduler to reconsider equal-priority runnable threads even
+ * if the preemption flag was not observed. */
+#define PPC_LOOP() do { \
+    __asm__ __volatile__("" ::: "memory"); \
+    ppc_r12c_guest_loop(c, __func__, __LINE__); \
+} while (0)
 #elif defined(NSMBU_R12B_COOPERATIVE_LOOPS)
 /* R12B Xbox-only: the private PPC recompiler emits PPC_LOOP() at back-edges.
  * In R12 these were empty, allowing a busy audio loop to monopolize guest
