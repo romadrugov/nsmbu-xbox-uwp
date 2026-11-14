@@ -7,7 +7,7 @@
          IgnorableNamespaces="uap mp">
   <Identity Name="Romadrugov.NSMBUFullRuntimeR12"
             Publisher="CN=NSMBUXboxR12"
-            Version="0.1.0.1"
+            Version="0.1.0.2"
             ProcessorArchitecture="x64"/>
   <mp:PhoneIdentity PhoneProductId="b968a99b-3fa5-4cb4-ab18-10e8799c8ea7"
                     PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
