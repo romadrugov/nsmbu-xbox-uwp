@@ -181,6 +181,16 @@ target_compile_definitions(r10_full_engine PUBLIC
   NSMBU_HAS_VULKAN=1 NSMBU_SDL_HOST=1 NSMBU_XBOX_UWP=1 VK_NO_PROTOTYPES=1
   WINAPI_FAMILY=WINAPI_FAMILY_APP _WIN32_WINNT=0x0A00
   NOMINMAX _CRT_SECURE_NO_WARNINGS)
+# R12C replaces the guest's misleading last LR with exact private C
+# function/back-edge locations in the on-console watchdog log. Only owner
+# generated game translation and native thread monitor need this enabled.
+option(R12C_GUEST_PC_DIAGNOSTICS
+  "Track translated guest function and back-edge progress on Xbox" OFF)
+if(R12C_GUEST_PC_DIAGNOSTICS)
+  target_compile_definitions(r10_gamecode PRIVATE NSMBU_R12C_GUEST_TRACE=1)
+  target_compile_definitions(r10_full_engine PRIVATE NSMBU_R12C_GUEST_TRACE=1)
+  message(STATUS "R12C guest function and back-edge trace ENABLED")
+endif()
 target_compile_options(r10_full_engine PRIVATE
   /clang:-ffp-contract=off)
 set_source_files_properties(${GX2} ${GFX}
